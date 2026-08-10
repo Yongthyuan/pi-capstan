@@ -1,0 +1,30 @@
+{
+  "name": "pi-agent-swarm",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Native multi-agent swarm extension for pi-coding-agent",
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "check": "tsc --noEmit && node scripts/check-syntax.mjs",
+    "test:native": "node scripts/native-smoke.mjs",
+    "test:native:model": "node scripts/native-model-smoke.mjs",
+    "test:native:plan": "node scripts/native-plan-smoke.mjs",
+    "test:native:e2e": "node scripts/native-e2e-smoke.mjs"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.1",
+    "@earendil-works/pi-tui": "0.84.1",
+    "@types/node": "22.19.19",
+    "typebox": "1.3.7",
+    "typescript": "5.9.3"
+  }
+}
