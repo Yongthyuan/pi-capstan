@@ -33,11 +33,26 @@ export async function buildRepoBrief(repoRoot: string, task: string, maxChars = 
     if (taskTokens.some((token) => lower.includes(token.toLowerCase()))) candidates.add(file);
     if (candidates.size >= 24) break;
   }
+  let rgAvailable = true;
   for (const token of taskTokens.slice(0, 8)) {
-    const hits = await runCommand("rg", ["-l", "-i", "-F", token, "--glob", "!.git/**", "--glob", "!node_modules/**", "--glob", "!dist/**", "."], { cwd: repoRoot, timeoutMs: 5_000 });
-    if (hits.exitCode > 1) continue;
-    for (const hit of hits.stdout.split("\n").map((item) => item.replace(/^\.\//, "")).filter(Boolean)) {
-      if (files.includes(hit)) candidates.add(hit);
+    try {
+      const hits = await runCommand("rg", ["-l", "-i", "-F", token, "--glob", "!.git/**", "--glob", "!node_modules/**", "--glob", "!dist/**", "."], { cwd: repoRoot, timeoutMs: 5_000 });
+      if (hits.exitCode > 1) continue;
+      for (const hit of hits.stdout.split("\n").map((item) => item.replace(/^\.\//, "")).filter(Boolean)) {
+        if (files.includes(hit)) candidates.add(hit);
+        if (candidates.size >= 48) break;
+      }
+    } catch (error: any) {
+      if (error?.code !== "ENOENT") throw error;
+      rgAvailable = false;
+      break;
+    }
+  }
+  if (!rgAvailable) {
+    for (const file of files) {
+      const content = await readTextIfPresent(join(repoRoot, file), 64_000);
+      const lower = content.toLowerCase();
+      if (taskTokens.some((token) => lower.includes(token.toLowerCase()))) candidates.add(file);
       if (candidates.size >= 48) break;
     }
   }

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RepoLock } from "../src/repo-lock.ts";
@@ -47,14 +47,21 @@ test("run store recovers from the previous atomic state and reports unrecoverabl
 
 test("repo brief includes untracked content evidence with source line numbers", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-scout-"));
+  const originalPath = process.env.PATH;
   try {
     await runCommand("git", ["init", "-q"], { cwd: root });
     await mkdir(join(root, "src"), { recursive: true });
     await writeFile(join(root, "src", "service.ts"), "export function authenticateUser() { return true; }\n");
+    const gitPath = (await runCommand("which", ["git"])).stdout.trim();
+    const bin = join(root, "bin");
+    await mkdir(bin);
+    await symlink(gitPath, join(bin, "git"));
+    process.env.PATH = bin;
     const brief = await buildRepoBrief(root, "fix authenticateUser behavior");
     assert.match(brief.evidence, /src\/service\.ts/);
     assert.match(brief.evidence, /1: export function authenticateUser/);
   } finally {
+    process.env.PATH = originalPath;
     await rm(root, { recursive: true, force: true });
   }
 });
