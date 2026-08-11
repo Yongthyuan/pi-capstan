@@ -113,7 +113,7 @@ test("scope cleanup reverts only out-of-scope paths and commits valid work", asy
     const committed = await workspace.commitTask(task, child.path, { violationPolicy: "revert" });
     assert.deepEqual(committed.files, ["src/ok.ts"]);
     assert.deepEqual(committed.reverted.sort(), ["README.md", "rogue.txt"]);
-    assert.equal(await readFile(join(child.path, "README.md"), "utf8"), "base\n");
+    assert.equal((await readFile(join(child.path, "README.md"), "utf8")).replaceAll("\r\n", "\n"), "base\n");
     assert.equal(await existsAt(child.path, "rogue.txt"), false);
     await workspace.cleanupWorktrees(true);
   } finally {

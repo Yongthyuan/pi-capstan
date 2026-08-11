@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { WorkerHandle } from "../src/worker.ts";
 import { Orchestrator } from "../src/orchestrator.ts";
 import { WorkspaceManager } from "../src/workspace.ts";
@@ -27,7 +27,7 @@ test("worker handle speaks strict JSONL RPC", async () => {
     await worker.prompt("go", 5_000);
     assert.equal(text.includes("Completion Report"), true);
     assert.equal(worker.usage.output, 5);
-    assert.equal(worker.sessionFile, join(root, "fake-session.jsonl"));
+    assert.equal(resolve(worker.sessionFile!), resolve(root, "fake-session.jsonl"));
     await worker.stop(50);
     assert.equal(worker.running, false);
   } finally {

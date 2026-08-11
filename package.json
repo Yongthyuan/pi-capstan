@@ -6,7 +6,7 @@
   "description": "Native multi-agent swarm extension for pi-coding-agent",
   "scripts": {
     "test": "node --test test/*.test.ts",
-    "test:ci": "node --test --test-force-exit test/*.test.ts",
+    "test:ci": "node --test --test-isolation=none --test-force-exit test/*.test.ts",
     "check": "tsc --noEmit && node scripts/check-syntax.mjs",
     "test:native": "node scripts/native-smoke.mjs",
     "test:native:model": "node scripts/native-model-smoke.mjs",
