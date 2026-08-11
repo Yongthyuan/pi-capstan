@@ -4,11 +4,14 @@ import { Box, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { COMPLETIONS, parseSwarmCommand } from "./command.ts";
 import { SwarmService } from "./service.ts";
+import { assessPiCompatibility } from "./compat.ts";
 
 export default function swarmExtension(pi: ExtensionAPI) {
   // Workers explicitly disable extension discovery, but this also prevents recursion
   // if a user manually starts a worker without --no-extensions.
   if (process.env.PI_SWARM_WORKER === "1") return;
+  const compatibility = assessPiCompatibility(VERSION, pi);
+  if (compatibility.level === "unsupported") throw new Error(compatibility.message);
 
   const service = new SwarmService(pi, getAgentDir(), CONFIG_DIR_NAME);
 
@@ -71,7 +74,7 @@ export default function swarmExtension(pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (_event, ctx) => {
-    if (!VERSION.startsWith("0.84.")) ctx.ui.notify(`Pi Agent Swarm 已针对 pi 0.84.x 验证；当前版本 ${VERSION}，请先运行测试`, "warning");
+    if (compatibility.level === "compatible") ctx.ui.notify(compatibility.message, "warning");
     await service.onSessionStart(ctx);
   });
   pi.on("session_shutdown", () => service.onSessionShutdown());

@@ -1,6 +1,6 @@
 import type { ParsedSwarmCommand } from "./types.ts";
 
-const ACTIONS = new Set(["board", "pause", "resume", "abort", "merge", "clean", "cases", "replay", "config", "status", "help"]);
+const ACTIONS = new Set(["board", "pause", "resume", "abort", "merge", "pr", "replan", "clean", "cases", "replay", "config", "status", "help"]);
 
 export function splitArgs(input: string): string[] {
   const result: string[] = [];
@@ -53,6 +53,7 @@ export function parseSwarmCommand(input: string): ParsedSwarmCommand {
     else if (token === "--plan-only" || token === "-n") parsed.planOnly = true;
     else if (token === "--max") parsed.max = parsePositive(tokens[++index], "--max");
     else if (token === "--budget") parsed.budget = parsePositive(tokens[++index], "--budget");
+    else if (token === "--best-of") parsed.bestOf = parsePositive(tokens[++index], "--best-of");
     else if (token === "--model") {
       parsed.model = tokens[++index];
       if (!parsed.model) throw new Error("--model 缺少值");
@@ -75,6 +76,8 @@ export const COMPLETIONS = [
   "resume",
   "abort",
   "merge",
+  "pr",
+  "replan",
   "clean",
   "cases",
   "replay",
@@ -86,5 +89,6 @@ export const COMPLETIONS = [
   "--plan-only",
   "--max",
   "--budget",
+  "--best-of",
   "--model",
 ];

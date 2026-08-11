@@ -28,6 +28,10 @@ export interface Subtask {
   role: string;
   rolePrompt: string;
   ownedPaths: string[];
+  /** Files that may legitimately be touched by more than one task, such as lockfiles. */
+  sharedPaths?: string[];
+  /** Generated artifacts that are allowed even when they are outside ownedPaths. */
+  generatedPaths?: string[];
   readPaths: string[];
   dependsOn: string[];
   contracts: string[];
@@ -68,6 +72,7 @@ export type WorkerStatus =
   | "merging"
   | "done"
   | "failed"
+  | "blocked"
   | "paused"
   | "detached"
   | "killed";
@@ -111,6 +116,16 @@ export interface WorkerRuntime {
   endedAt?: number;
   scopeViolations: string[];
   stallCount?: number;
+  activeTools?: number;
+  activeToolStartedAt?: number;
+  setupComplete?: boolean;
+  revertedScopePaths?: string[];
+  blockedBy?: string[];
+  mailboxOffset?: number;
+  competition?: {
+    winner: string;
+    attempts: Array<{ id: string; status: WorkerStatus; branch: string; retries: number; cost: number; verificationOk: boolean }>;
+  };
   interruptedTurn?: boolean;
   verification?: VerificationResult;
   launch?: WorkerLaunchManifest;
@@ -151,6 +166,7 @@ export interface GitMergeOperation {
   verification?: VerificationResult;
   startedAt: number;
   updatedAt: number;
+  setupComplete?: boolean;
 }
 
 export interface EffectiveBudget {
@@ -191,6 +207,7 @@ export interface SwarmRun {
   planning?: PlanningRuntime;
   effectiveBudget?: EffectiveBudget;
   planEdits: string[];
+  planRevision?: number;
   git?: GitRunState;
   workers: Record<string, WorkerRuntime>;
   merged: string[];
@@ -202,6 +219,10 @@ export interface SwarmRun {
   error?: string;
   runDir: string;
   reportPath?: string;
+  partialSuccess?: boolean;
+  leadMailboxOffset?: number;
+  integrationSetupComplete?: boolean;
+  prUrl?: string;
 }
 
 export interface VerificationCommandResult {
@@ -222,6 +243,7 @@ export interface VerificationResult {
 
 export interface WorkerEventMap {
   action: { label: string };
+  tool: { active: boolean; name?: string; reset?: boolean };
   text: { text: string };
   usage: { usage: UsageTotals; turns: number };
   settled: Record<string, never>;
@@ -264,6 +286,13 @@ export interface SwarmConfig {
     perAgentBudgetUsd: number;
     perAgentTokenLimit: number;
     tools: string[];
+    setupCommands: string[];
+    setupTimeoutSec: number;
+    shareDependencyDirs: string[];
+    scopeAllowlist: string[];
+    scopeViolationPolicy: "fail" | "revert";
+    bestOfN: number;
+    bestOfNJudge: boolean;
   };
   run: {
     budgetUsd: number;
@@ -276,6 +305,8 @@ export interface SwarmConfig {
     };
     verifyTimeoutSec: number;
     verifyAllowedPrefixes: string[];
+    setupAllowedPrefixes: string[];
+    failurePolicy: "fail-fast" | "continue-independent";
   };
   approvalPolicy: "route" | "autoDeny" | "autoAllow";
   bashDenylist: string[];
@@ -283,7 +314,7 @@ export interface SwarmConfig {
     enabled: boolean;
     max: number;
     threshold: number;
-    matcher: "lexical";
+    matcher: "lexical" | "hybrid";
   };
   retention: {
     logsDays: number;
@@ -292,18 +323,20 @@ export interface SwarmConfig {
   ui: {
     renderThrottleMs: number;
     reportTriggerTurn: boolean;
+    approvalBatchMs: number;
   };
   safetyGuardPath: string | null;
 }
 
 export interface ParsedSwarmCommand {
-  action: "run" | "board" | "pause" | "resume" | "abort" | "merge" | "clean" | "cases" | "replay" | "config" | "status" | "help";
+  action: "run" | "board" | "pause" | "resume" | "abort" | "merge" | "pr" | "replan" | "clean" | "cases" | "replay" | "config" | "status" | "help";
   task: string;
   force: boolean;
   solo: boolean;
   planOnly: boolean;
   max?: number;
   budget?: number;
+  bestOf?: number;
   model?: string;
   rest: string[];
 }

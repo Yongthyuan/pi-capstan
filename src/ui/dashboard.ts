@@ -15,7 +15,8 @@ export async function showDashboard(ctx: any, getRun: () => SwarmRun | undefined
 export function renderRunText(run?: SwarmRun): string {
   if (!run) return "没有活跃 swarm run";
   const done = Object.values(run.workers).filter((worker) => worker.status === "done").length;
-  return `swarm ${run.runId} · ${run.phase} · ${done}/${run.plan?.subtasks.length ?? 0} done · $${run.totals.cost.toFixed(3)}`;
+  const blocked = Object.values(run.workers).filter((worker) => worker.status === "blocked").length;
+  return `swarm ${run.runId} · ${run.phase}${run.partialSuccess ? " (partial)" : ""} · ${done}/${run.plan?.subtasks.length ?? 0} done${blocked ? ` · ${blocked} blocked` : ""} · $${run.totals.cost.toFixed(3)}`;
 }
 
 export function widgetLines(run?: SwarmRun): string[] | undefined {

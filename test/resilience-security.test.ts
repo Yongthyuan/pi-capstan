@@ -9,6 +9,7 @@ import { createPlan } from "../src/planner.ts";
 import { pruneRunArtifacts } from "../src/state.ts";
 import { canonicalWriteTarget } from "../src/utils.ts";
 import { verifyCommands } from "../src/verifier.ts";
+import { buildGuardSource } from "../src/guard-template.ts";
 
 test("verification rejects shell composition before spawning", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-verify-policy-"));
@@ -121,4 +122,24 @@ test("invalid nested config fails with a useful error", () => {
   const config: any = structuredClone(DEFAULT_CONFIG);
   config.worker = null;
   assert.throws(() => validateConfig(config), /worker/);
+});
+
+test("worker guard exposes scoped filesystem and mailbox tools", () => {
+  const source = buildGuardSource({
+    runDir: "/tmp/run",
+    worktree: "/tmp/worktree",
+    heartbeatFile: "/tmp/run/heartbeat",
+    task: { id: "a", title: "a", goal: "a", role: "a", rolePrompt: "a", ownedPaths: ["src/**"], sharedPaths: ["package-lock.json"], generatedPaths: ["generated/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: [], criteria: [] } },
+    trusted: true,
+    config: structuredClone(DEFAULT_CONFIG),
+    peers: ["b"],
+  });
+  assert.match(source, /name: "swarm_send"/);
+  assert.match(source, /name: "swarm_inbox"/);
+  assert.match(source, /name: "swarm_fs"/);
+  assert.match(source, /package-lock\.json/);
+  assert.match(source, /"peers":\["b"\]/);
+  const deny = DEFAULT_CONFIG.bashDenylist.map((value) => new RegExp(value, "i"));
+  assert.equal(deny.some((expression) => expression.test("git -c user.name=x rm secret.txt")), true);
+  assert.equal(deny.some((expression) => expression.test("git diff --stat HEAD")), false);
 });

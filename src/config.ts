@@ -11,8 +11,8 @@ export const DEFAULT_CONFIG: SwarmConfig = {
     repoMapTokens: 4_500,
     schemaRetries: 2,
     timeoutSec: 120,
-    budgetUsd: 0.5,
-    tokenLimit: 80_000,
+    budgetUsd: 1,
+    tokenLimit: 160_000,
   },
   worker: {
     model: null,
@@ -20,13 +20,20 @@ export const DEFAULT_CONFIG: SwarmConfig = {
     maxRetries: 2,
     stallSec: 180,
     wallClockMin: 25,
-    perAgentBudgetUsd: 0.5,
-    perAgentTokenLimit: 120_000,
-    tools: ["read", "bash", "edit", "write", "grep", "find", "ls"],
+    perAgentBudgetUsd: 2,
+    perAgentTokenLimit: 250_000,
+    tools: ["read", "bash", "edit", "write", "grep", "find", "ls", "swarm_send", "swarm_inbox", "swarm_fs"],
+    setupCommands: [],
+    setupTimeoutSec: 300,
+    shareDependencyDirs: ["node_modules"],
+    scopeAllowlist: ["package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb", "Cargo.lock", "poetry.lock", "uv.lock"],
+    scopeViolationPolicy: "revert",
+    bestOfN: 1,
+    bestOfNJudge: true,
   },
   run: {
-    budgetUsd: 2,
-    tokenLimit: 400_000,
+    budgetUsd: 8,
+    tokenLimit: 1_000_000,
     mergeStrategy: "branch",
     verify: { worker: null, integrationLight: null, full: null },
     verifyTimeoutSec: 300,
@@ -61,10 +68,12 @@ export const DEFAULT_CONFIG: SwarmConfig = {
       "dotnet build",
       "./node_modules/.bin/tsc",
     ],
+    setupAllowedPrefixes: ["npm ci", "npm install", "pnpm install", "yarn install", "bun install", "python -m pip install", "python3 -m pip install", "uv sync", "cargo fetch"],
+    failurePolicy: "continue-independent",
   },
   approvalPolicy: "route",
   bashDenylist: [
-    "\\bgit\\s+(?:-[^\\s]+\\s+)*(?:push|commit|reset|clean|checkout|switch|branch|worktree|update-ref)\\b",
+    "\\bgit\\b[^\\n]*(?:\\s)(?:add|am|apply|bisect|branch|checkout|cherry-pick|clean|commit|merge|mv|push|rebase|reset|restore|revert|rm|switch|tag|update-index|update-ref|worktree)\\b",
     "\\bsudo\\b",
     "\\brm\\b[^\\n]*\\s-rf\\s+[/~]",
     "\\b(?:curl|wget)\\b[^|\\n]*\\|\\s*(?:sh|bash|zsh)\\b",
@@ -72,9 +81,9 @@ export const DEFAULT_CONFIG: SwarmConfig = {
     "\\b(?:sed\\s+-[^\\n]*i|perl\\s+-[^\\n]*i)\\b",
     "(?:^|[^<])>{1,2}(?:[^>]|$)",
   ],
-  caseStore: { enabled: false, max: 200, threshold: 0.35, matcher: "lexical" },
+  caseStore: { enabled: true, max: 200, threshold: 0.35, matcher: "hybrid" },
   retention: { logsDays: 14, sessionsDays: 30 },
-  ui: { renderThrottleMs: 250, reportTriggerTurn: false },
+  ui: { renderThrottleMs: 250, reportTriggerTurn: false, approvalBatchMs: 100 },
   safetyGuardPath: null,
 };
 
@@ -125,7 +134,10 @@ export function validateConfig(config: SwarmConfig): SwarmConfig {
   config.run.verifyTimeoutSec = clampInt(config.run.verifyTimeoutSec, 10, 3600);
   config.worker.stallSec = clampInt(config.worker.stallSec, 10, 3600);
   config.worker.wallClockMin = clampInt(config.worker.wallClockMin, 1, 240);
+  config.worker.setupTimeoutSec = clampInt(config.worker.setupTimeoutSec, 10, 3600);
+  config.worker.bestOfN = clampInt(config.worker.bestOfN, 1, 8);
   config.ui.renderThrottleMs = clampInt(config.ui.renderThrottleMs, 25, 5_000);
+  config.ui.approvalBatchMs = clampInt(config.ui.approvalBatchMs, 0, 2_000);
   config.retention.logsDays = clampInt(config.retention.logsDays, 1, 3650);
   config.retention.sessionsDays = clampInt(config.retention.sessionsDays, 1, 3650);
   config.worker.perAgentTokenLimit = Math.max(1_000, config.worker.perAgentTokenLimit);
@@ -135,6 +147,10 @@ export function validateConfig(config: SwarmConfig): SwarmConfig {
   if (!Array.isArray(config.worker.tools) || config.worker.tools.length === 0) {
     config.worker.tools = [...DEFAULT_CONFIG.worker.tools];
   }
+  if (!Array.isArray(config.worker.setupCommands) || config.worker.setupCommands.some((item) => typeof item !== "string" || !item.trim())) config.worker.setupCommands = [];
+  if (!Array.isArray(config.worker.shareDependencyDirs) || config.worker.shareDependencyDirs.some((item) => typeof item !== "string" || !safeRelativePath(item))) config.worker.shareDependencyDirs = [...DEFAULT_CONFIG.worker.shareDependencyDirs];
+  if (!Array.isArray(config.worker.scopeAllowlist) || config.worker.scopeAllowlist.some((item) => typeof item !== "string" || !safeRelativePath(item))) config.worker.scopeAllowlist = [...DEFAULT_CONFIG.worker.scopeAllowlist];
+  if (!Array.isArray(config.run.setupAllowedPrefixes) || config.run.setupAllowedPrefixes.some((item) => typeof item !== "string" || !item.trim())) config.run.setupAllowedPrefixes = [...DEFAULT_CONFIG.run.setupAllowedPrefixes];
   if (!Array.isArray(config.run.verifyAllowedPrefixes) || config.run.verifyAllowedPrefixes.some((item) => typeof item !== "string" || !item.trim())) {
     config.run.verifyAllowedPrefixes = [...DEFAULT_CONFIG.run.verifyAllowedPrefixes];
   }
@@ -146,7 +162,9 @@ export function validateConfig(config: SwarmConfig): SwarmConfig {
   }
   if (!["route", "autoDeny", "autoAllow"].includes(config.approvalPolicy)) throw new Error("approvalPolicy 非法");
   if (!["branch", "apply", "commit"].includes(config.run.mergeStrategy)) throw new Error("run.mergeStrategy 非法");
-  if (config.caseStore.matcher !== "lexical") throw new Error("caseStore.matcher 仅支持 lexical");
+  if (!["fail", "revert"].includes(config.worker.scopeViolationPolicy)) throw new Error("worker.scopeViolationPolicy 非法");
+  if (!["fail-fast", "continue-independent"].includes(config.run.failurePolicy)) throw new Error("run.failurePolicy 非法");
+  if (!["lexical", "hybrid"].includes(config.caseStore.matcher)) throw new Error("caseStore.matcher 非法");
   config.caseStore.max = clampInt(config.caseStore.max, 1, 10_000);
   config.caseStore.threshold = Math.min(1, Math.max(0, Number(config.caseStore.threshold) || 0));
   for (const [name, commands] of Object.entries(config.run.verify)) {
@@ -164,4 +182,9 @@ function clampInt(value: number, min: number, max: number): number {
 
 function positiveNumber(value: number, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function safeRelativePath(value: string): boolean {
+  const normalized = value.replaceAll("\\", "/");
+  return Boolean(normalized) && !normalized.startsWith("/") && !normalized.split("/").includes("..");
 }

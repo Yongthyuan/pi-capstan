@@ -57,7 +57,7 @@ export function validatePlan(value: unknown, maxSubtasks = 12): PlanValidation {
       for (let right = left + 1; right < wave.length; right++) {
         const a = plan.subtasks.find((task) => task.id === wave[left])!;
         const b = plan.subtasks.find((task) => task.id === wave[right])!;
-        if (globsMayOverlap(a.ownedPaths, b.ownedPaths)) errors.push(`${a.id} 与 ${b.id} 同波次 ownedPaths 可能重叠`);
+        if (globsMayOverlap([...a.ownedPaths, ...(a.generatedPaths ?? [])], [...b.ownedPaths, ...(b.generatedPaths ?? [])])) errors.push(`${a.id} 与 ${b.id} 同波次 owned/generated paths 可能重叠`);
       }
     }
   }
@@ -75,6 +75,11 @@ function validateSubtask(task: Partial<Subtask>, ids: Set<string>, errors: strin
     for (const path of task.ownedPaths) if (!safePathPattern(path)) errors.push(`${task.id}.ownedPaths 含非法路径: ${String(path)}`);
   }
   if (Array.isArray(task.readPaths)) for (const path of task.readPaths) if (!safePathPattern(path)) errors.push(`${task.id}.readPaths 含非法路径: ${String(path)}`);
+  for (const key of ["sharedPaths", "generatedPaths"] as const) {
+    const paths = task[key];
+    if (paths !== undefined && !Array.isArray(paths)) errors.push(`${task.id}.${key} 必须是数组`);
+    if (Array.isArray(paths)) for (const path of paths) if (!safePathPattern(path)) errors.push(`${task.id}.${key} 含非法路径: ${String(path)}`);
+  }
   if (Array.isArray(task.dependsOn)) for (const id of task.dependsOn) if (!safeIdentifier(id)) errors.push(`${task.id}.dependsOn 含非法 id`);
   if (Array.isArray(task.contracts)) for (const id of task.contracts) if (!safeIdentifier(id)) errors.push(`${task.id}.contracts 含非法 id`);
   if (!task.acceptance || !Array.isArray(task.acceptance.commands) || task.acceptance.commands.length === 0) {

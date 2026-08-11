@@ -3,10 +3,11 @@ import type { SwarmRun, VerificationResult } from "./types.ts";
 export function buildReport(run: SwarmRun, finalVerification?: VerificationResult, landingNote?: string): string {
   const workers = Object.values(run.workers);
   const lines = [
-    `# Swarm ${run.phase === "done" ? "完成" : "结束"} · ${run.plan?.taskSummary ?? run.task}`,
+    `# Swarm ${run.phase === "done" ? (run.partialSuccess ? "部分完成" : "完成") : "结束"} · ${run.plan?.taskSummary ?? run.task}`,
     "",
     `- runId: \`${run.runId}\``,
     `- 状态: ${run.phase}`,
+    `- 结果完整性: ${run.partialSuccess ? "部分成功（失败任务及其依赖未落地）" : "完整"} · plan revision ${run.planRevision ?? 1}`,
     `- 落地: ${run.outcome ?? "未落地"}${landingNote ? `（${landingNote}）` : ""}`,
     `- 用时: ${formatDuration(run.totals.wallSec)} · 成本: $${run.totals.cost.toFixed(4)} · tokens: ${run.totals.input + run.totals.output}`,
     "",
@@ -18,6 +19,11 @@ export function buildReport(run: SwarmRun, finalVerification?: VerificationResul
   for (const worker of workers) {
     const task = run.plan?.subtasks.find((item) => item.id === worker.subtaskId);
     lines.push(`| ${worker.subtaskId} | ${escapeCell(task?.title ?? worker.subtaskId)} | ${worker.status} | ${worker.retries} | ${worker.usage.input + worker.usage.output} | $${worker.usage.cost.toFixed(4)} |`);
+  }
+  const recoveredScope = workers.filter((worker) => worker.revertedScopePaths?.length);
+  if (recoveredScope.length) {
+    lines.push("", "## Scope 自动回收", "");
+    for (const worker of recoveredScope) lines.push(`- ${worker.subtaskId}: ${worker.revertedScopePaths!.join(", ")}`);
   }
   lines.push("", "## 验证", "");
   for (const worker of workers) {

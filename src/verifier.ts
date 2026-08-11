@@ -167,6 +167,13 @@ function verificationEnvironment(): NodeJS.ProcessEnv {
 }
 
 function signalProcess(pid: number, signal: NodeJS.Signals): void {
+  if (process.platform === "win32") {
+    try {
+      const killer = spawn("taskkill", ["/PID", String(pid), "/T", ...(signal === "SIGKILL" ? ["/F"] : [])], { stdio: "ignore", windowsHide: true });
+      killer.unref();
+      return;
+    } catch { /* Fall back to process.kill below. */ }
+  }
   try { process.kill(process.platform === "win32" ? pid : -pid, signal); }
   catch { try { process.kill(pid, signal); } catch { /* Already exited. */ } }
 }

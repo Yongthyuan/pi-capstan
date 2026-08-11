@@ -1,5 +1,5 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { appendFile, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import type { GitMergeOperation, GitRunState, MergeStrategy, Subtask, SwarmRun } from "./types.ts";
 import { ensurePrivateDir, matchesAnyGlob, pathExists, runCommand, sha256 } from "./utils.ts";
@@ -90,17 +90,46 @@ export class WorkspaceManager {
     return { path, branch };
   }
 
-  async commitTask(task: Subtask, worktree: string): Promise<{ commit: string; files: string[] }> {
-    await this.mustGit(worktree, ["add", "-A"]);
-    const names = (await this.mustGit(worktree, ["diff", "--cached", "--name-only", "--diff-filter=ACMRD"])).split("\n").filter(Boolean);
-    const outside = names.filter((file) => !matchesAnyGlob(file, task.ownedPaths));
-    if (outside.length) {
-      await this.gitCommand(worktree, ["reset"]);
-      throw new Error(`scope violation: ${outside.join(", ")}`);
+  async prepareTaskDependencies(worktree: string, directories: string[]): Promise<string[]> {
+    const git = this.requireGit();
+    const linked: string[] = [];
+    for (const directory of directories) {
+      const normalized = directory.replaceAll("\\", "/").replace(/^\.\//, "");
+      if (!normalized || normalized.startsWith("/") || normalized.split("/").includes("..")) continue;
+      const source = join(git.repoRoot, normalized);
+      const target = join(worktree, normalized);
+      await this.addLocalExclude(normalized);
+      if (!(await pathExists(source)) || await pathEntryExists(target)) continue;
+      await mkdir(dirname(target), { recursive: true });
+      await symlink(source, target, process.platform === "win32" ? "junction" : "dir");
+      linked.push(normalized);
     }
-    if (names.length === 0) return { commit: (await this.mustGit(worktree, ["rev-parse", "HEAD"])).trim(), files: [] };
+    return linked;
+  }
+
+  async commitTask(
+    task: Subtask,
+    worktree: string,
+    options: { allowlist?: string[]; violationPolicy?: "fail" | "revert"; ephemeralPaths?: string[] } = {},
+  ): Promise<{ commit: string; files: string[]; reverted: string[] }> {
+    await this.mustGit(worktree, ["add", "-A"]);
+    for (const path of options.ephemeralPaths ?? []) await this.gitCommand(worktree, ["reset", "-q", "HEAD", "--", path]);
+    let names = (await this.mustGit(worktree, ["diff", "--cached", "--name-only", "--diff-filter=ACMRD"])).split("\n").filter(Boolean);
+    const allowed = [...task.ownedPaths, ...(task.sharedPaths ?? []), ...(task.generatedPaths ?? []), ...(options.allowlist ?? [])];
+    const outside = names.filter((file) => !matchesAnyGlob(file, allowed));
+    if (outside.length) {
+      if ((options.violationPolicy ?? "fail") === "fail") {
+        await this.gitCommand(worktree, ["reset"]);
+        throw new Error(`scope violation: ${outside.join(", ")}`);
+      }
+      await this.revertPaths(worktree, outside);
+      await this.mustGit(worktree, ["add", "-A"]);
+      for (const path of options.ephemeralPaths ?? []) await this.gitCommand(worktree, ["reset", "-q", "HEAD", "--", path]);
+      names = (await this.mustGit(worktree, ["diff", "--cached", "--name-only", "--diff-filter=ACMRD"])).split("\n").filter(Boolean);
+    }
+    if (names.length === 0) return { commit: (await this.mustGit(worktree, ["rev-parse", "HEAD"])).trim(), files: [], reverted: outside };
     await this.mustGit(worktree, ["-c", "user.name=Pi Swarm", "-c", "user.email=pi-swarm@local.invalid", "commit", "-m", `swarm(${task.id}): ${task.title}`]);
-    return { commit: (await this.mustGit(worktree, ["rev-parse", "HEAD"])).trim(), files: names };
+    return { commit: (await this.mustGit(worktree, ["rev-parse", "HEAD"])).trim(), files: names, reverted: outside };
   }
 
   async beginCandidate(kind: GitMergeOperation["kind"], operationId: string): Promise<GitMergeOperation> {
@@ -205,6 +234,10 @@ export class WorkspaceManager {
 
   async abortMerge(operation: GitMergeOperation): Promise<void> {
     await this.gitCommand(operation.candidateWorktree, ["merge", "--abort"]);
+    operation.pendingSubtaskId = undefined;
+    operation.phase = "candidate";
+    operation.candidateSha = (await this.mustGit(operation.candidateWorktree, ["rev-parse", "HEAD"])).trim();
+    operation.updatedAt = Date.now();
   }
 
   async promoteCandidate(operation: GitMergeOperation): Promise<string> {
@@ -302,17 +335,29 @@ export class WorkspaceManager {
     return { outcome: "applied", note: "结果已暂存，请用 git diff --staged 审阅" };
   }
 
-  async cleanupWorktrees(preserveBranches = true): Promise<void> {
+  async cleanupWorktrees(preserveBranches = true, preservePaths: string[] = []): Promise<void> {
     const git = this.requireGit();
     const root = dirname(git.integrationWorktree);
     const list = await this.gitCommand(git.repoRoot, ["worktree", "list", "--porcelain"]);
-    const paths = list.stdout.split("\n").filter((line) => line.startsWith("worktree ")).map((line) => line.slice(9)).filter((path) => resolve(path).startsWith(`${resolve(root)}/`) || resolve(path) === resolve(root));
-    for (const path of paths) await this.gitCommand(git.repoRoot, ["worktree", "remove", "--force", path]);
+    const paths = list.stdout.split("\n").filter((line) => line.startsWith("worktree ")).map((line) => line.slice(9)).filter((path) => {
+      const rel = relative(resolve(root), resolve(path));
+      return rel === "" || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`));
+    });
+    const preserved = new Set(preservePaths.map((path) => resolve(path)));
+    for (const path of paths) if (!preserved.has(resolve(path))) await this.gitCommand(git.repoRoot, ["worktree", "remove", "--force", path]);
     await this.gitCommand(git.repoRoot, ["worktree", "prune"]);
     if (!preserveBranches) {
       const branches = (await this.gitCommand(git.repoRoot, ["branch", "--list", `swarm/${this.runId}/*`])).stdout.split("\n").map((line) => line.replace(/^\*?\s*/, "")).filter(Boolean);
       for (const branch of branches) await this.gitCommand(git.repoRoot, ["branch", "-D", branch]);
     }
+  }
+
+  async discardTaskWorktree(path: string, branch: string): Promise<void> {
+    const git = this.requireGit();
+    if (!branch.startsWith(`swarm/${this.runId}/`)) throw new Error(`refusing to discard non-swarm branch ${branch}`);
+    if (await this.isWorktree(path)) await this.gitCommand(git.repoRoot, ["worktree", "remove", "--force", path]);
+    if (await this.branchExists(branch)) await this.gitCommand(git.repoRoot, ["branch", "-D", branch]);
+    await this.gitCommand(git.repoRoot, ["worktree", "prune"]);
   }
 
   async reconcileMerged(run: SwarmRun): Promise<void> {
@@ -350,6 +395,29 @@ export class WorkspaceManager {
     }
   }
 
+  private async revertPaths(worktree: string, paths: string[]): Promise<void> {
+    for (const path of paths) {
+      const target = resolve(worktree, path);
+      const rel = relative(resolve(worktree), target).replaceAll("\\", "/");
+      if (!rel || rel === ".." || rel.startsWith("../")) throw new Error(`refusing to revert path outside worktree: ${path}`);
+      await this.gitCommand(worktree, ["reset", "-q", "HEAD", "--", path]);
+      const tracked = await this.gitCommand(worktree, ["ls-files", "--error-unmatch", "--", path]);
+      if (tracked.exitCode === 0) await this.mustGit(worktree, ["restore", "--worktree", "--source=HEAD", "--", path]);
+      else await rm(target, { recursive: true, force: true });
+    }
+  }
+
+  private async addLocalExclude(directory: string): Promise<void> {
+    const git = this.requireGit();
+    const result = await this.gitCommand(git.repoRoot, ["rev-parse", "--git-path", "info/exclude"]);
+    if (result.exitCode !== 0 || !result.stdout.trim()) return;
+    const path = isAbsolute(result.stdout.trim()) ? result.stdout.trim() : join(git.repoRoot, result.stdout.trim());
+    await mkdir(dirname(path), { recursive: true });
+    const line = `/${directory.replace(/\/$/, "")}/`;
+    const current = await pathExists(path) ? await readFile(path, "utf8") : "";
+    if (!current.split("\n").includes(line)) await appendFile(path, `${current.endsWith("\n") || !current ? "" : "\n"}${line}\n`);
+  }
+
   private requireGit(): GitRunState {
     if (!this.git) throw new Error("workspace 尚未 prepare/restore");
     return this.git;
@@ -376,4 +444,8 @@ export class WorkspaceManager {
   private gitCommand(cwd: string, args: string[], env?: NodeJS.ProcessEnv) {
     return runCommand("git", args, { cwd, env, timeoutMs: 120_000 });
   }
+}
+
+async function pathEntryExists(path: string): Promise<boolean> {
+  try { await lstat(path); return true; } catch { return false; }
 }

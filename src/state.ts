@@ -76,6 +76,10 @@ function migrateRun(value: any): SwarmRun {
   if (value.schemaVersion !== 1) throw new Error(`不支持 state schemaVersion ${String(value.schemaVersion)}`);
   if (typeof value.runId !== "string" || typeof value.runDir !== "string") throw new Error("state 缺少 runId/runDir");
   value.planEdits ??= [];
+  value.planRevision ??= 1;
+  value.partialSuccess ??= false;
+  value.leadMailboxOffset ??= 0;
+  value.integrationSetupComplete ??= false;
   value.workers ??= {};
   value.merged ??= [];
   value.conflicts ??= [];
@@ -86,6 +90,9 @@ function migrateRun(value: any): SwarmRun {
     worker.scopeViolations ??= [];
     worker.usage ??= { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
     worker.turns ??= 0;
+    worker.activeTools ??= 0;
+    worker.revertedScopePaths ??= [];
+    worker.mailboxOffset ??= 0;
   }
   return value as SwarmRun;
 }

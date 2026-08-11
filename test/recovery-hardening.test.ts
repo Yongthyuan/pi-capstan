@@ -66,6 +66,23 @@ test("repo brief includes untracked content evidence with source line numbers", 
   }
 });
 
+test("repo brief expands task hits through import and test/source neighborhoods", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-structural-scout-"));
+  try {
+    await runCommand("git", ["init", "-q"], { cwd: root });
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "widget-service.ts"), "import type { Widget } from './widget-types';\nexport class WidgetService {}\n");
+    await writeFile(join(root, "src", "widget-types.ts"), "export interface Widget { id: string }\n");
+    await writeFile(join(root, "src", "widget-service.test.ts"), "test('widget', () => {});\n");
+    const brief = await buildRepoBrief(root, "change WidgetService behavior");
+    assert.match(brief.evidence, /src\/widget-service\.ts/);
+    assert.match(brief.evidence, /src\/widget-types\.ts/);
+    assert.match(brief.evidence, /src\/widget-service\.test\.ts/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("planner model calls carry bounded provider options and account usage", async () => {
   const config = structuredClone(DEFAULT_CONFIG);
   config.planner.timeoutSec = 17;

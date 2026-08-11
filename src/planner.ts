@@ -25,7 +25,7 @@ export async function buildRepoBrief(repoRoot: string, task: string, maxChars = 
   const languages = Array.from(extensions.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([ext]) => ext);
   const frameworks = inferFrameworks(files);
   const tree = buildTree(files, 140);
-  const taskTokens = tokenizeTask(task).filter((token) => token.length >= 3);
+  const taskTokens = expandQueryTokens(task);
   const manifests = ["package.json", "pyproject.toml", "Cargo.toml", "go.mod", "README.md", "AGENTS.md"];
   const candidates = new Set(manifests.filter((file) => files.includes(file)));
   for (const file of files) {
@@ -56,9 +56,19 @@ export async function buildRepoBrief(repoRoot: string, task: string, maxChars = 
       if (candidates.size >= 48) break;
     }
   }
+  const contentCache = new Map<string, string>();
+  const contentFor = async (file: string) => {
+    if (!contentCache.has(file)) contentCache.set(file, await readTextIfPresent(join(repoRoot, file), 64_000));
+    return contentCache.get(file)!;
+  };
+  for (const file of [...candidates]) {
+    const content = await contentFor(file);
+    for (const neighbor of structuralNeighbors(file, content, files)) candidates.add(neighbor);
+  }
+  const ranked = await Promise.all([...candidates].map(async (file) => ({ file, content: await contentFor(file) })));
+  ranked.sort((a, b) => relevanceScore(b.file, b.content, taskTokens) - relevanceScore(a.file, a.content, taskTokens) || a.file.localeCompare(b.file));
   let evidence = "";
-  for (const file of candidates) {
-    const content = await readTextIfPresent(join(repoRoot, file), 64_000);
+  for (const { file, content } of ranked) {
     if (!content) continue;
     evidence += `\n--- ${file} ---\n${selectEvidence(content, taskTokens, 90)}\n`;
     if (evidence.length >= maxChars) break;
@@ -73,6 +83,45 @@ export async function buildRepoBrief(repoRoot: string, task: string, maxChars = 
     evidence,
     summary: `${files.length} files; languages=${languages.join(",") || "unknown"}; frameworks=${frameworks.join(",") || "unknown"}`,
   };
+}
+
+function expandQueryTokens(task: string): string[] {
+  const expanded = new Set<string>();
+  for (const token of tokenizeTask(task)) {
+    if (token.length >= 3) expanded.add(token.toLowerCase());
+    for (const part of token.replace(/([a-z])([A-Z])/g, "$1 $2").split(/[./_-]+/)) if (part.length >= 3) expanded.add(part.toLowerCase());
+  }
+  return [...expanded];
+}
+
+function relevanceScore(file: string, content: string, tokens: string[]): number {
+  const lowerPath = file.toLowerCase();
+  const lower = content.toLowerCase();
+  let score = /(?:^|\/)(?:readme|agents|package|pyproject|cargo|go\.mod)/i.test(file) ? 1 : 0;
+  for (const token of tokens) {
+    if (lowerPath === token || lowerPath.endsWith(`/${token}`)) score += 10;
+    else if (lowerPath.includes(token)) score += 5;
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const count = lower.match(new RegExp(`(?:^|[^\\p{L}\\p{N}_])${escaped}(?=$|[^\\p{L}\\p{N}_])`, "gu"))?.length ?? 0;
+    score += Math.min(5, count);
+    if (new RegExp(`\\b(?:class|interface|type|function|def|struct|enum)\\s+${escaped}\\b`, "iu").test(content)) score += 8;
+  }
+  return score;
+}
+
+function structuralNeighbors(file: string, content: string, files: string[]): string[] {
+  const result = new Set<string>();
+  const directory = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : "";
+  const stem = basename(file).replace(/\.(?:test|spec)?\.[^.]+$/, "").replace(/\.[^.]+$/, "");
+  for (const candidate of files) {
+    const candidateStem = basename(candidate).replace(/\.(?:test|spec)?\.[^.]+$/, "").replace(/\.[^.]+$/, "");
+    if (candidate !== file && candidateStem === stem) result.add(candidate);
+  }
+  for (const match of content.matchAll(/(?:from\s+|require\s*\(|import\s*\()\s*["'](\.{1,2}\/[^"']+)["']/g)) {
+    const base = join(directory, match[1]!).replaceAll("\\", "/").replace(/^\.\//, "");
+    for (const candidate of files) if (candidate === base || candidate.startsWith(`${base}.`) || candidate.startsWith(`${base}/index.`)) result.add(candidate);
+  }
+  return [...result].slice(0, 24);
 }
 
 async function listRepoFiles(repoRoot: string): Promise<string[]> {
@@ -157,7 +206,7 @@ ${verificationPrefixes.join("\n")}
 HARD RULES
 1. Contracts must match supplied source evidence. Do not invent signatures. If no shared interface/API/schema/convention is needed, use contracts: []. Do not create contracts for paths, evidence, or commands.
 2. Every contract object has exactly id, kind, description, definition. kind is one of interface, api, schema, convention.
-3. Parallel subtasks must have exclusive ownedPaths. Shared registries belong to a later integration subtask.
+3. Parallel subtasks must have exclusive ownedPaths. Use sharedPaths only for unavoidable shared metadata such as lockfiles, and generatedPaths only for deterministic generated artifacts.
 4. Every subtask has runnable acceptance commands beginning with an allowed prefix. Never use pipes, redirects, shell operators, substitutions, or multiline commands.
 5. Identifiers match [A-Za-z0-9][A-Za-z0-9_-]{0,63}. Paths are relative and contain no parent traversal segment.
 6. Use 2..${maxSubtasks} subtasks, a shallow DAG, and a mergeOrder that respects dependencies.
@@ -165,7 +214,7 @@ HARD RULES
 8. rolePrompt states mission, scope, constraints, and requires a Completion Report.
 
 Return JSON only. Use this exact structural schema:
-{"schemaVersion":1,"taskSummary":"...","strategy":"...","contracts":[{"id":"contract_id","kind":"interface","description":"...","definition":"..."}],"subtasks":[{"id":"worker_id","title":"...","goal":"...","role":"...","rolePrompt":"...","ownedPaths":["relative/path/**"],"readPaths":[],"dependsOn":[],"contracts":[],"acceptance":{"commands":["allowed command"],"criteria":["observable result"]},"model":"optional provider/model","estTokens":10000}],"mergeOrder":["worker_id"],"risks":["..."]}`;
+{"schemaVersion":1,"taskSummary":"...","strategy":"...","contracts":[{"id":"contract_id","kind":"interface","description":"...","definition":"..."}],"subtasks":[{"id":"worker_id","title":"...","goal":"...","role":"...","rolePrompt":"...","ownedPaths":["relative/path/**"],"sharedPaths":[],"generatedPaths":[],"readPaths":[],"dependsOn":[],"contracts":[],"acceptance":{"commands":["allowed command"],"criteria":["observable result"]},"model":"optional provider/model","estTokens":10000}],"mergeOrder":["worker_id"],"risks":["..."]}`;
 }
 
 export async function createPlan(

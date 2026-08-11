@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceManager } from "../src/workspace.ts";
@@ -56,6 +56,65 @@ test("dirty temporary baseline can execute but never auto-applies", async () => 
     const state = await workspace.prepare(true);
     assert.equal(state.dirtyBase, true);
     assert.equal((await workspace.land("apply")).outcome, "branch");
+    await workspace.cleanupWorktrees(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("worktrees safely share an existing dependency directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-dependencies-"));
+  const repo = join(root, "repo");
+  await mkdir(repo, { recursive: true });
+  try {
+    await writeFile(join(repo, "README.md"), "base\n");
+    await git(repo, ["init", "-q"]);
+    await git(repo, ["config", "user.email", "test@example.invalid"]);
+    await git(repo, ["config", "user.name", "Test"]);
+    await git(repo, ["add", "README.md"]);
+    await git(repo, ["commit", "-qm", "initial"]);
+    const workspace = new WorkspaceManager({ cwd: repo, runId: "deps", runDir: join(repo, ".pi", "swarm", "runs", "deps"), worktreesRoot: join(root, "worktrees") });
+    await workspace.prepare(false);
+    await mkdir(join(repo, "node_modules"));
+    await writeFile(join(repo, "node_modules", "marker"), "shared\n");
+    const task: any = { id: "a", title: "a", ownedPaths: ["**"] };
+    const child = await workspace.createTaskWorktree(task);
+    assert.deepEqual(await workspace.prepareTaskDependencies(child.path, ["node_modules"]), ["node_modules"]);
+    assert.equal((await lstat(join(child.path, "node_modules"))).isSymbolicLink(), true);
+    assert.equal(await readFile(join(child.path, "node_modules", "marker"), "utf8"), "shared\n");
+    await writeFile(join(child.path, "result.txt"), "ok\n");
+    const committed = await workspace.commitTask(task, child.path, { ephemeralPaths: ["node_modules"] });
+    assert.deepEqual(committed.files, ["result.txt"]);
+    await workspace.cleanupWorktrees(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("scope cleanup reverts only out-of-scope paths and commits valid work", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-scope-revert-"));
+  const repo = join(root, "repo");
+  await mkdir(repo, { recursive: true });
+  try {
+    await writeFile(join(repo, "README.md"), "base\n");
+    await git(repo, ["init", "-q"]);
+    await git(repo, ["config", "user.email", "test@example.invalid"]);
+    await git(repo, ["config", "user.name", "Test"]);
+    await git(repo, ["add", "README.md"]);
+    await git(repo, ["commit", "-qm", "initial"]);
+    const workspace = new WorkspaceManager({ cwd: repo, runId: "scope", runDir: join(repo, ".pi", "swarm", "runs", "scope"), worktreesRoot: join(root, "worktrees") });
+    await workspace.prepare(false);
+    const task: any = { id: "a", title: "a", ownedPaths: ["src/**"] };
+    const child = await workspace.createTaskWorktree(task);
+    await mkdir(join(child.path, "src"));
+    await writeFile(join(child.path, "src", "ok.ts"), "ok\n");
+    await writeFile(join(child.path, "README.md"), "out of scope\n");
+    await writeFile(join(child.path, "rogue.txt"), "out of scope\n");
+    const committed = await workspace.commitTask(task, child.path, { violationPolicy: "revert" });
+    assert.deepEqual(committed.files, ["src/ok.ts"]);
+    assert.deepEqual(committed.reverted.sort(), ["README.md", "rogue.txt"]);
+    assert.equal(await readFile(join(child.path, "README.md"), "utf8"), "base\n");
+    assert.equal(await existsAt(child.path, "rogue.txt"), false);
     await workspace.cleanupWorktrees(true);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -150,6 +209,41 @@ test("recovery reconciles a candidate promoted just before state persistence", a
     assert.deepEqual(run.merged, ["a"]);
     assert.equal(run.workers.a.status, "done");
     await workspace.cleanupWorktrees(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a persisted run branch can be applied after worktrees were cleaned", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-late-merge-"));
+  const repo = join(root, "repo");
+  await mkdir(repo, { recursive: true });
+  try {
+    await writeFile(join(repo, "README.md"), "base\n");
+    await git(repo, ["init", "-q"]);
+    await git(repo, ["config", "user.email", "test@example.invalid"]);
+    await git(repo, ["config", "user.name", "Test"]);
+    await git(repo, ["add", "README.md"]);
+    await git(repo, ["commit", "-qm", "initial"]);
+    const runDir = join(repo, ".pi", "swarm", "runs", "late");
+    const first = new WorkspaceManager({ cwd: repo, runId: "late", runDir, worktreesRoot: join(root, "worktrees") });
+    const state = await first.prepare(false);
+    const task: any = { id: "a", title: "a", ownedPaths: ["src/**"] };
+    const child = await first.createTaskWorktree(task);
+    await mkdir(join(child.path, "src"));
+    await writeFile(join(child.path, "src", "late.ts"), "ok\n");
+    await first.commitTask(task, child.path);
+    const operation = await first.beginCandidate("wave", "late-wave");
+    await first.mergeTask(task, child.branch, operation);
+    operation.phase = "verified";
+    await first.promoteCandidate(operation);
+    await first.cleanupWorktrees(true);
+
+    const restarted = new WorkspaceManager({ cwd: repo, runId: "late", runDir, worktreesRoot: join(root, "worktrees") });
+    restarted.restore(state);
+    const landing = await restarted.land("apply");
+    assert.equal(landing.outcome, "applied");
+    assert.equal(await existsAt(repo, "src/late.ts"), true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

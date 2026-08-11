@@ -10,6 +10,9 @@ import { RunStore } from "../src/state.ts";
 import { DEFAULT_CONFIG } from "../src/config.ts";
 import { emptyUsage, runCommand } from "../src/utils.ts";
 
+const PASS_COMMAND = 'node -e "process.exit(0)"';
+const FAIL_COMMAND = 'node -e "process.exit(1)"';
+
 test("worker handle speaks strict JSONL RPC", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-worker-"));
   try {
@@ -47,15 +50,15 @@ test("orchestrator completes two-worker branch-only vertical slice", async () =>
     const plan: any = {
       schemaVersion: 1, taskSummary: "fake parallel", strategy: "two workers", contracts: [],
       subtasks: [
-        { id: "a", title: "a", goal: "a", role: "a", rolePrompt: "a", ownedPaths: ["src/a/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: ["true"], criteria: [] } },
-        { id: "b", title: "b", goal: "b", role: "b", rolePrompt: "b", ownedPaths: ["src/b/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: ["true"], criteria: [] } },
+        { id: "a", title: "a", goal: "a", role: "a", rolePrompt: "a", ownedPaths: ["src/a/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: [PASS_COMMAND], criteria: [] } },
+        { id: "b", title: "b", goal: "b", role: "b", rolePrompt: "b", ownedPaths: ["src/b/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: [PASS_COMMAND], criteria: [] } },
       ], mergeOrder: ["a", "b"], risks: [],
     };
     const run: any = { schemaVersion: 1, runId: "r1", createdAt: Date.now(), updatedAt: Date.now(), cwd: repo, task: "fake", phase: "reviewing", plan, planEdits: [], workers: {}, merged: [], conflicts: [], totals: { ...emptyUsage(), wallSec: 0, turns: 0 }, runDir };
     const config = structuredClone(DEFAULT_CONFIG);
     config.run.verify.integrationLight = [];
     config.run.verify.full = [];
-    config.run.verifyAllowedPrefixes = ["true"];
+    config.run.verifyAllowedPrefixes = ["node -e"];
     config.worker.maxConcurrency = 2;
     const store = new RunStore(join(repo, ".pi", "swarm", "runs"));
     let report = "";
@@ -128,7 +131,20 @@ test("stall watchdog steers once then fails a persistently silent worker", async
   }
 });
 
-test("detach interrupts without failure and a new orchestrator verifies then resumes", async () => {
+test("stall watchdog exempts a long-running active tool", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-tool-stall-"));
+  try {
+    const fixture = await makeOrchestratorFixture(root, "tool-stall", 300, async () => "stop", { FAKE_PI_TOOL_ACTIVE: "1" });
+    fixture.config.worker.stallSec = 0.05;
+    await fixture.orchestrator.execute(false);
+    assert.equal(fixture.run.phase, "done", fixture.run.error);
+    assert.equal(Object.values(fixture.run.workers).every((worker: any) => worker.activeTools === 0), true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("detach affects only one worker and a later orchestrator can resume it", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-detach-"));
   try {
     const first = await makeOrchestratorFixture(root, "detach", 500);
@@ -136,8 +152,12 @@ test("detach interrupts without failure and a new orchestrator verifies then res
     await waitFor(() => first.run.workers.a?.status === "working");
     const takeover = await first.orchestrator.detachWorker("a");
     await execution;
-    assert.equal(first.run.phase, "interrupted");
+    assert.equal(first.run.phase, "done");
     assert.equal(first.run.workers.a.status, "detached");
+    assert.deepEqual(first.run.merged, ["b"]);
+    assert.equal(first.run.partialSuccess, true);
+    const { access } = await import("node:fs/promises");
+    await access(first.run.workers.a.worktree);
     assert.equal(takeover?.includes("--no-extensions"), true);
     assert.equal(takeover?.includes("PI_SWARM_WORKER=1"), true);
     assert.equal(takeover?.includes("'-e'"), true);
@@ -165,24 +185,151 @@ test("detach interrupts without failure and a new orchestrator verifies then res
   }
 });
 
+test("independent workers continue after one failure and dependent work is blocked", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-partial-"));
+  try {
+    const fixture = await makeOrchestratorFixture(root, "partial", 20);
+    fixture.run.plan.subtasks[0].acceptance.commands = [FAIL_COMMAND];
+    fixture.run.plan.subtasks.push({ id: "c", title: "c", goal: "c", role: "c", rolePrompt: "c", ownedPaths: ["src/c/**"], readPaths: [], dependsOn: ["a"], contracts: [], acceptance: { commands: [PASS_COMMAND], criteria: [] } });
+    fixture.run.plan.mergeOrder = ["a", "b", "c"];
+    fixture.config.run.verifyAllowedPrefixes = ["node -e"];
+    fixture.config.worker.maxRetries = 0;
+    await fixture.orchestrator.execute(false);
+    assert.equal(fixture.run.phase, "done", fixture.run.error);
+    assert.deepEqual(fixture.run.merged, ["b"]);
+    assert.equal(fixture.run.workers.a.status, "failed");
+    assert.equal(fixture.run.workers.c.status, "blocked");
+    assert.deepEqual(fixture.run.workers.c.blockedBy, ["a"]);
+    assert.equal(fixture.run.partialSuccess, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("slot scheduler starts queued work as soon as one slot frees", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-slots-"));
+  try {
+    const fixture = await makeOrchestratorFixture(root, "slots", 20, async () => "stop", { FAKE_PI_DELAY_MAP: JSON.stringify({ a: 600, b: 20, c: 20 }) });
+    fixture.run.plan.subtasks.push({ id: "c", title: "c", goal: "c", role: "c", rolePrompt: "c", ownedPaths: ["src/c/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: [PASS_COMMAND], criteria: [] } });
+    fixture.run.plan.mergeOrder = ["a", "b", "c"];
+    const execution = fixture.orchestrator.execute(false);
+    await waitFor(() => Boolean(fixture.run.workers.c?.startedAt));
+    assert.notEqual(fixture.run.workers.a.status, "done");
+    assert.equal(fixture.run.workers.a.endedAt, undefined);
+    await execution;
+    assert.deepEqual(fixture.run.merged, ["a", "b", "c"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("runtime replan can add pending work without mutating started tasks", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-replan-"));
+  try {
+    const fixture = await makeOrchestratorFixture(root, "replan", 250);
+    const execution = fixture.orchestrator.execute(false);
+    await waitFor(() => fixture.run.workers.a?.status === "working" && fixture.run.workers.b?.status === "working");
+    await fixture.orchestrator.pause();
+    const plan = structuredClone(fixture.run.plan);
+    plan.subtasks.push({ id: "c", title: "c", goal: "c", role: "c", rolePrompt: "c", ownedPaths: ["src/c/**"], readPaths: [], dependsOn: ["a"], contracts: [], acceptance: { commands: [PASS_COMMAND], criteria: [] } });
+    plan.mergeOrder.push("c");
+    await fixture.orchestrator.replacePlan(plan);
+    await fixture.orchestrator.resume();
+    await execution;
+    assert.equal(fixture.run.planRevision, 2);
+    assert.deepEqual(fixture.run.merged, ["a", "b", "c"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("simultaneous worker approvals are routed as one batch", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-ui-batch-"));
+  try {
+    let batches = 0;
+    const fixture = await makeOrchestratorFixture(root, "ui-batch", 20, async () => "stop", { FAKE_PI_UI: "1" }, async (requests) => {
+      batches++;
+      assert.equal(requests.length, 2);
+      return Object.fromEntries(requests.map(({ request }) => [request.id, { id: request.id, confirmed: true }]));
+    });
+    fixture.config.ui.approvalBatchMs = 50;
+    await fixture.orchestrator.execute(false);
+    assert.equal(fixture.run.phase, "done", fixture.run.error);
+    assert.equal(batches, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("best-of-N runs isolated candidates and records the selected winner", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-best-of-"));
+  try {
+    const fixture = await makeOrchestratorFixture(root, "best-of", 20);
+    fixture.config.worker.bestOfN = 2;
+    fixture.config.worker.bestOfNJudge = true;
+    await fixture.orchestrator.execute(false);
+    assert.equal(fixture.run.phase, "done", fixture.run.error);
+    assert.deepEqual(fixture.run.merged, ["a", "b"]);
+    assert.equal(fixture.run.workers.a.competition.attempts.length, 2);
+    assert.match(fixture.run.workers.a.competition.winner, /^a-try-/);
+    assert.equal(Object.keys(fixture.run.workers).some((id) => /-try-/.test(id)), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("trusted setup runs before worker and integration verification without spending retries", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-setup-"));
+  try {
+    const fixture = await makeOrchestratorFixture(root, "setup", 20, async () => "stop", {}, undefined, true);
+    fixture.config.worker.setupCommands = ['node -e "require(\'fs\').mkdirSync(\'node_modules\',{recursive:true}),require(\'fs\').writeFileSync(\'node_modules/setup.marker\',\'ok\')"'];
+    fixture.config.run.setupAllowedPrefixes = ["node -e"];
+    await fixture.orchestrator.execute(false);
+    assert.equal(fixture.run.phase, "done", fixture.run.error);
+    assert.equal(Object.values(fixture.run.workers).every((worker: any) => worker.retries === 0 && worker.setupComplete), true);
+    assert.equal(fixture.run.gitOperations.every((operation: any) => operation.setupComplete), true);
+    assert.equal(fixture.run.integrationSetupComplete, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 async function writeFakePi(root: string): Promise<string> {
   const path = join(root, "fake-pi.mjs");
   await writeFile(path, `import readline from "node:readline";
 const root = ${JSON.stringify(root)};
 const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
-const delay = Number(process.env.FAKE_PI_DELAY_MS ?? 10);
+const workerId = process.argv.join(" ").match(/swarm\\/([A-Za-z0-9_-]+)/)?.[1] ?? "unknown";
+const delayMap = JSON.parse(process.env.FAKE_PI_DELAY_MAP ?? "{}");
+const delay = Number(delayMap[workerId] ?? process.env.FAKE_PI_DELAY_MS ?? 10);
+const activeTool = process.env.FAKE_PI_TOOL_ACTIVE === "1";
+const requestUi = process.env.FAKE_PI_UI === "1";
 let activeTimer;
+let waitingUi = false;
 function out(value) { process.stdout.write(JSON.stringify(value) + "\\n"); }
+function finish() {
+  if (activeTool) out({ type: "tool_execution_end", toolName: "bash" });
+  out({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Completion Report\\n- done" }], usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: { total: 0.001 } } } });
+  out({ type: "agent_settled" });
+}
 rl.on("line", (line) => {
   const cmd = JSON.parse(line);
   if (cmd.type === "get_state") out({ id: cmd.id, type: "response", command: "get_state", success: true, data: { sessionFile: root + "/fake-session.jsonl", sessionId: "fake" } });
   else if (cmd.type === "prompt") {
     out({ id: cmd.id, type: "response", command: "prompt", success: true });
+    if (activeTool) out({ type: "tool_execution_start", toolName: "bash", args: { command: "long-running-test" } });
+    if (requestUi) {
+      waitingUi = true;
+      out({ type: "extension_ui_request", id: "ui-" + workerId, method: "confirm", title: "approve " + workerId, message: "continue?" });
+      return;
+    }
     activeTimer = setTimeout(() => {
       activeTimer = undefined;
-      out({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Completion Report\\n- done" }], usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: { total: 0.001 } } } });
-      out({ type: "agent_settled" });
+      finish();
     }, delay);
+  } else if (cmd.type === "extension_ui_response" && waitingUi) {
+    waitingUi = false;
+    activeTimer = setTimeout(() => { activeTimer = undefined; finish(); }, delay);
   } else if (cmd.type === "abort") {
     if (activeTimer) clearTimeout(activeTimer), (activeTimer = undefined);
     out({ type: "agent_settled" });
@@ -195,7 +342,15 @@ rl.on("line", (line) => {
   return path;
 }
 
-async function makeOrchestratorFixture(root: string, runId: string, delayMs: number, onBudget: () => Promise<"extend" | "stop"> = async () => "stop") {
+async function makeOrchestratorFixture(
+  root: string,
+  runId: string,
+  delayMs: number,
+  onBudget: () => Promise<"extend" | "stop"> = async () => "stop",
+  extraEnv: NodeJS.ProcessEnv = {},
+  onUiBatch?: (requests: Array<{ workerId: string; request: any }>) => Promise<Record<string, Record<string, unknown>>>,
+  projectTrusted = false,
+) {
   const repo = join(root, "repo");
   await mkdir(repo, { recursive: true });
   await writeFile(join(repo, "README.md"), "base\n");
@@ -212,8 +367,8 @@ async function makeOrchestratorFixture(root: string, runId: string, delayMs: num
     strategy: "two workers",
     contracts: [],
     subtasks: [
-      { id: "a", title: "a", goal: "a", role: "a", rolePrompt: "a", ownedPaths: ["src/a/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: ["true"], criteria: [] } },
-      { id: "b", title: "b", goal: "b", role: "b", rolePrompt: "b", ownedPaths: ["src/b/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: ["true"], criteria: [] } },
+      { id: "a", title: "a", goal: "a", role: "a", rolePrompt: "a", ownedPaths: ["src/a/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: [PASS_COMMAND], criteria: [] } },
+      { id: "b", title: "b", goal: "b", role: "b", rolePrompt: "b", ownedPaths: ["src/b/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: [PASS_COMMAND], criteria: [] } },
     ],
     mergeOrder: ["a", "b"],
     risks: [],
@@ -222,7 +377,7 @@ async function makeOrchestratorFixture(root: string, runId: string, delayMs: num
   const config = structuredClone(DEFAULT_CONFIG);
   config.run.verify.integrationLight = [];
   config.run.verify.full = [];
-  config.run.verifyAllowedPrefixes = ["true"];
+  config.run.verifyAllowedPrefixes = ["node -e"];
   config.worker.maxConcurrency = 2;
   const store = new RunStore(join(repo, ".pi", "swarm", "runs"));
   const orchestrator = new Orchestrator({
@@ -231,8 +386,8 @@ async function makeOrchestratorFixture(root: string, runId: string, delayMs: num
     store,
     agentDir: join(root, "agent"),
     workspace: new WorkspaceManager({ cwd: repo, runId, runDir, worktreesRoot: join(root, "worktrees") }),
-    workerFactory: (options) => new WorkerHandle({ ...options, piCommand: process.execPath, piArgsPrefix: [fake], extraEnv: { FAKE_PI_DELAY_MS: String(delayMs) } }),
-    hooks: { projectTrusted: false, onUpdate: () => {}, onUi: async (_id, request) => ({ id: request.id, cancelled: true }), onBudget, onReport: async () => {} },
+    workerFactory: (options) => new WorkerHandle({ ...options, piCommand: process.execPath, piArgsPrefix: [fake], extraEnv: { ...extraEnv, FAKE_PI_DELAY_MS: String(delayMs) } }),
+    hooks: { projectTrusted, onUpdate: () => {}, onUi: async (_id, request) => ({ id: request.id, cancelled: true }), onUiBatch, onBudget, onReport: async () => {} },
   });
   return { repo, fake, run, config, store, orchestrator };
 }

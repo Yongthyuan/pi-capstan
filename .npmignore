@@ -1,0 +1,14 @@
+.pi/
+.github/
+test/
+scripts/
+node_modules/
+coverage/
+dist/
+*.log
+.DS_Store
+.env
+.env.*
+auth.json
+models.json
+pi-swarm-构建计划.md

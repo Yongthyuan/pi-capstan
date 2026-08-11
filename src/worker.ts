@@ -236,7 +236,12 @@ export class WorkerHandle {
       return;
     }
     if (event.type === "tool_execution_start") {
+      this.emitter.emit("tool", { active: true, name: String(event.toolName ?? "") });
       this.emitter.emit("action", { label: formatToolAction(event.toolName, event.args ?? event.input ?? {}) });
+      return;
+    }
+    if (event.type === "tool_execution_end") {
+      this.emitter.emit("tool", { active: false, name: String(event.toolName ?? "") });
       return;
     }
     if (event.type === "message_end" && event.message?.role === "assistant") {
@@ -257,6 +262,7 @@ export class WorkerHandle {
       return;
     }
     if (event.type === "agent_settled") {
+      this.emitter.emit("tool", { active: false, reset: true });
       const waiters = this.settledWaiters.splice(0);
       for (const waiter of waiters) clearTimeout(waiter.timer), waiter.resolve();
       this.emitter.emit("settled", {});
@@ -296,6 +302,13 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 function signalProcess(pid: number, signal: NodeJS.Signals): void {
+  if (process.platform === "win32") {
+    try {
+      const killer = spawn("taskkill", ["/PID", String(pid), "/T", ...(signal === "SIGKILL" ? ["/F"] : [])], { stdio: "ignore", windowsHide: true });
+      killer.unref();
+      return;
+    } catch { /* Fall back to process.kill below. */ }
+  }
   try {
     process.kill(process.platform === "win32" ? pid : -pid, signal);
   } catch {

@@ -8,11 +8,13 @@ export class CaseStore {
   readonly root: string;
   readonly max: number;
   readonly threshold: number;
+  readonly matcher: "lexical" | "hybrid";
 
-  constructor(root: string, max: number, threshold: number) {
+  constructor(root: string, max: number, threshold: number, matcher: "lexical" | "hybrid" = "hybrid") {
     this.root = root;
     this.max = max;
     this.threshold = threshold;
+    this.matcher = matcher;
   }
 
   async list(): Promise<CaseRecord[]> {
@@ -33,9 +35,11 @@ export class CaseStore {
     const tags = tokenizeTask(redactTask(task));
     const candidates = (await this.list()).map((record) => {
       const lexical = jaccard(tags, record.taskTags);
+      const phrase = trigramSimilarity(redactTask(task), record.taskText);
       const stack = jaccard([...brief.languages, ...brief.frameworks], [...record.repoFingerprint.langs, ...record.repoFingerprint.frameworks]);
       const rating = record.rating.explicit * 2 + record.rating.implicit;
-      return { record, score: lexical * 0.7 + stack * 0.3, rating };
+      const score = this.matcher === "lexical" ? lexical * 0.7 + stack * 0.3 : lexical * 0.45 + phrase * 0.25 + stack * 0.3;
+      return { record, score, rating };
     });
     const positive = candidates.filter((item) => item.score >= this.threshold && item.rating >= 0).sort((a, b) => b.score - a.score).slice(0, Math.max(0, limit - 1));
     const negative = candidates.filter((item) => item.score >= this.threshold && item.rating < 0).sort((a, b) => b.score - a.score).slice(0, 1);
@@ -75,6 +79,16 @@ export class CaseStore {
     scored.sort((a, b) => a.score - b.score);
     for (const item of scored.slice(0, records.length - this.max)) await this.delete(item.record.id);
   }
+}
+
+function trigramSimilarity(left: string, right: string): number {
+  const grams = (value: string) => {
+    const normalized = value.toLowerCase().replace(/\s+/g, " ").trim();
+    const result = new Set<string>();
+    for (let index = 0; index < normalized.length - 2; index++) result.add(normalized.slice(index, index + 3));
+    return result;
+  };
+  return jaccard(grams(left), grams(right));
 }
 
 function buildCaseRecord(run: SwarmRun, plan: SwarmPlan, brief: RepoBrief): CaseRecord {

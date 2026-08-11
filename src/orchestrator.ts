@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ConflictRecord, GitMergeOperation, PendingUiRequest, Subtask, SwarmConfig, SwarmRun, VerificationResult, WorkerRuntime } from "./types.ts";
 import { addUsage, emptyUsage, ensurePrivateDir, pathExists, truncateTail } from "./utils.ts";
@@ -16,6 +16,8 @@ export interface OrchestratorHooks {
   projectTrusted: boolean;
   onUpdate(run: SwarmRun): void;
   onUi(workerId: string, request: PendingUiRequest & Record<string, unknown>): Promise<Record<string, unknown>>;
+  onUiBatch?(requests: Array<{ workerId: string; request: PendingUiRequest & Record<string, unknown> }>): Promise<Record<string, Record<string, unknown>>>;
+  onLeadMessage?(workerId: string, message: string): Promise<void> | void;
   onBudget(workerId: string, message: string): Promise<"extend" | "stop">;
   onBeforeReport?(run: SwarmRun): Promise<void> | void;
   onReport(run: SwarmRun, report: string): Promise<void> | void;
@@ -38,6 +40,12 @@ interface PreparedWorker {
   handle?: WorkerHandle;
 }
 
+interface QueuedUiRequest {
+  handle: WorkerHandle;
+  runtime: WorkerRuntime;
+  request: PendingUiRequest & Record<string, unknown>;
+}
+
 class ControlFlowError extends Error {}
 
 export class Orchestrator {
@@ -56,9 +64,13 @@ export class Orchestrator {
   private readonly interruptedTurns = new Set<string>();
   private heartbeatTimer?: ReturnType<typeof setInterval>;
   private stallTimer?: ReturnType<typeof setInterval>;
+  private mailboxTimer?: ReturnType<typeof setInterval>;
   private persistTimer?: ReturnType<typeof setTimeout>;
   private persistChain: Promise<void> = Promise.resolve();
+  private mergeChain: Promise<void> = Promise.resolve();
   private interactionChain: Promise<void> = Promise.resolve();
+  private uiBatch: QueuedUiRequest[] = [];
+  private uiBatchTimer?: ReturnType<typeof setTimeout>;
   private abortRequested = false;
   private pauseRequested = false;
   private interruptRequested = false;
@@ -96,9 +108,14 @@ export class Orchestrator {
     }
     this.run.error = undefined;
     this.run.outcome = undefined;
+    this.run.partialSuccess = false;
     this.startedAt = this.run.createdAt;
     try {
       if (this.run.git) {
+        for (const runtime of Object.values(this.run.workers)) {
+          if (["failed", "blocked", "detached"].includes(runtime.status)) runtime.status = "pending";
+          runtime.blockedBy = undefined;
+        }
         this.workspace.restore(this.run.git);
         await this.workspace.ensureIntegrationWorktree();
         await this.workspace.reconcileOperation(this.run);
@@ -110,36 +127,16 @@ export class Orchestrator {
       await this.startMonitors();
       this.run.phase = "executing";
       await this.persist();
-      for (const wave of validation.waves) {
-        await this.controlCheckpoint();
-        if (this.abortRequested) break;
-        const order = new Map(this.run.plan.mergeOrder.map((id, index) => [id, index]));
-        const tasks = this.run.plan.subtasks
-          .filter((task) => wave.includes(task.id) && !this.run.merged.includes(task.id))
-          .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-        if (tasks.length) await this.ensureCandidate("wave", `wave:${wave.join(",")}:${this.run.merged.length}`);
-        for (let offset = 0; offset < tasks.length; offset += this.config.worker.maxConcurrency) {
-          await this.controlCheckpoint();
-          const batch = tasks.slice(offset, offset + this.config.worker.maxConcurrency);
-          const prepared = (await Promise.all(batch.map((task) => this.runWorkerTask(task)))).filter((item): item is PreparedWorker => Boolean(item));
-          await this.controlCheckpoint();
-          prepared.sort((a, b) => (order.get(a.task.id) ?? 0) - (order.get(b.task.id) ?? 0));
-          for (const item of prepared) await this.mergePrepared(item);
-        }
-        const candidate = this.activeOperation();
-        const unresolvedCandidate = tasks.filter((task) => !candidate?.subtaskIds.includes(task.id));
-        if (unresolvedCandidate.length) throw new Error(`wave 候选未完成: ${unresolvedCandidate.map((task) => `${task.id}:${this.run.workers[task.id]?.status ?? "missing"}`).join(", ")}`);
-        await this.verifyIntegration(false);
-        await this.promoteActiveCandidate();
-        const unresolved = tasks.filter((task) => !this.run.merged.includes(task.id));
-        if (unresolved.length) throw new Error(`wave 未推进: ${unresolved.map((task) => task.id).join(", ")}`);
-      }
+      await this.executePlanDynamically();
       if (this.abortRequested) {
         this.run.phase = "aborted";
         this.run.outcome = "aborted";
         return;
       }
       await this.controlCheckpoint();
+      const incomplete = this.run.plan.subtasks.filter((task) => !this.run.merged.includes(task.id));
+      this.run.partialSuccess = this.run.merged.length > 0 && incomplete.length > 0;
+      if (!this.run.merged.length && incomplete.length) throw new Error(`没有子任务通过验证；失败/阻塞: ${incomplete.map((task) => `${task.id}:${this.run.workers[task.id]?.status ?? "pending"}`).join(", ")}`);
       this.run.phase = "finalizing";
       await this.persist();
       await this.verifyIntegration(true);
@@ -152,7 +149,8 @@ export class Orchestrator {
       await this.persist();
       this.run.phase = "done";
       this.run.totals.wallSec = Math.max(0, (Date.now() - this.startedAt) / 1000);
-      await this.workspace.cleanupWorktrees(landing.outcome === "branch");
+      const detachedPaths = Object.values(this.run.workers).filter((worker) => worker.status === "detached").map((worker) => worker.worktree).filter(Boolean);
+      await this.workspace.cleanupWorktrees(landing.outcome === "branch" || Boolean(this.run.partialSuccess), detachedPaths);
     } catch (error) {
       if (this.interruptRequested || this.run.phase === "interrupted") {
         this.run.phase = "interrupted";
@@ -247,11 +245,9 @@ export class Orchestrator {
     if (!runtime) return undefined;
     runtime.status = "detached";
     runtime.currentAction = "manual takeover";
-    this.interruptRequested = true;
-    this.run.phase = "interrupted";
     this.interruptedTurns.add(id);
-    this.abortVerifications();
-    await this.stopAll();
+    this.verificationControllers.get(id)?.abort();
+    await this.handles.get(id)?.stop();
     await this.persist();
     const launch = runtime.launch;
     if (!launch) throw new Error(`worker ${id} 缺少持久化启动清单，拒绝生成不受保护的接管命令`);
@@ -263,7 +259,79 @@ export class Orchestrator {
     args.push("--append-system-prompt", launch.promptPath);
     if (launch.safetyGuardPath) args.push("-e", launch.safetyGuardPath);
     args.push("-e", launch.guardPath, launch.projectTrusted ? "--approve" : "--no-approve");
-    return `cd ${shellQuote(runtime.worktree)} && env PI_SWARM_WORKER=1 PI_SWARM_RUN_DIR=${shellQuote(this.run.runDir)} ${args.map(shellQuote).join(" ")}`;
+    return buildManualTakeoverCommand(runtime.worktree, this.run.runDir, args);
+  }
+
+  async replacePlan(plan: SwarmRun["plan"]): Promise<void> {
+    if (!plan) throw new Error("新计划为空");
+    const validation = validatePlan(plan, this.config.planner.maxSubtasks);
+    if (!validation.ok) throw new Error(`新计划无效: ${validation.errors.join("; ")}`);
+    const previous = this.run.plan;
+    if (!previous) throw new Error("当前 run 没有计划");
+    for (const runtime of Object.values(this.run.workers)) {
+      if (!runtime.startedAt && !this.run.merged.includes(runtime.subtaskId)) continue;
+      const before = previous.subtasks.find((task) => task.id === runtime.subtaskId);
+      const after = plan.subtasks.find((task) => task.id === runtime.subtaskId);
+      if (!before || !after) throw new Error(`已启动任务 ${runtime.subtaskId} 不能在重规划中删除`);
+      if (JSON.stringify(stableTaskShape(before)) !== JSON.stringify(stableTaskShape(after))) {
+        throw new Error(`已启动任务 ${runtime.subtaskId} 的目标、依赖或作用域不能在重规划中修改`);
+      }
+    }
+    this.run.plan = plan;
+    this.run.planRevision = (this.run.planRevision ?? 1) + 1;
+    this.run.planEdits.push(`runtime replan revision ${this.run.planRevision}`);
+    await this.persist();
+  }
+
+  private async executePlanDynamically(): Promise<void> {
+    while (!this.abortRequested) {
+      await this.controlCheckpoint();
+      const plan = this.run.plan!;
+      const validation = validatePlan(plan, this.config.planner.maxSubtasks);
+      if (!validation.ok) throw new Error(`运行中计划无效: ${validation.errors.join("; ")}`);
+      const order = new Map(plan.mergeOrder.map((id, index) => [id, index]));
+      const remaining = plan.subtasks
+        .filter((task) => !this.run.merged.includes(task.id))
+        .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+      if (!remaining.length) return;
+      const runnable = remaining.filter((task) => {
+        const status = this.run.workers[task.id]?.status;
+        return task.dependsOn.every((id) => this.run.merged.includes(id)) && !["failed", "detached", "killed"].includes(status ?? "pending");
+      });
+      if (!runnable.length) {
+        for (const task of remaining) {
+          const runtime = this.run.workers[task.id];
+          if (["failed", "detached", "killed"].includes(runtime?.status ?? "")) continue;
+          this.markBlocked(task, task.dependsOn.filter((id) => !this.run.merged.includes(id)));
+        }
+        await this.persist();
+        return;
+      }
+      await this.ensureCandidate("wave", `ready:${runnable.map((task) => task.id).join(",")}:${this.run.merged.length}:r${this.run.planRevision ?? 1}`);
+      await this.runTaskPool(runnable);
+      await this.mergeChain;
+      const failed = runnable.filter((task) => this.run.workers[task.id]?.status === "failed");
+      if (failed.length && this.config.run.failurePolicy === "fail-fast") throw new Error(`worker 失败: ${failed.map((task) => task.id).join(", ")}`);
+      const candidate = this.activeOperation();
+      if (!candidate) continue;
+      if (!candidate.subtaskIds.length) {
+        await this.workspace.discardCandidate(candidate);
+        continue;
+      }
+      try {
+        await this.verifyIntegration(false);
+        await this.promoteActiveCandidate();
+      } catch (error) {
+        if (this.config.run.failurePolicy === "fail-fast") throw error;
+        const affected = [...candidate.subtaskIds];
+        await this.workspace.discardCandidate(candidate).catch(() => undefined);
+        for (const id of affected) {
+          const runtime = this.run.workers[id];
+          if (runtime) runtime.status = "failed", (runtime.currentAction = `integration rejected: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        await this.persist();
+      }
+    }
   }
 
   private async runWorkerTask(task: Subtask): Promise<PreparedWorker | undefined> {
@@ -290,6 +358,8 @@ export class Orchestrator {
     runtime.pendingUi ??= [];
     runtime.scopeViolations ??= [];
     runtime.stallCount ??= 0;
+    runtime.activeTools ??= 0;
+    runtime.revertedScopePaths ??= [];
     let handle: WorkerHandle | undefined;
     const ensureHandle = async (): Promise<WorkerHandle> => {
       if (handle?.running) return handle;
@@ -304,6 +374,7 @@ export class Orchestrator {
         task,
         trusted: this.hooks.projectTrusted,
         config: this.config,
+        peers: [...(this.run.plan?.subtasks.map((peer) => peer.id).filter((id) => id !== task.id) ?? []), "lead"],
       });
       const safetyGuardPath = await this.resolveSafetyGuard();
       runtime.launch = {
@@ -337,6 +408,21 @@ export class Orchestrator {
     runtime.startedAt ??= Date.now();
     await this.persist();
     try {
+      runtime.currentAction = "preparing worktree dependencies";
+      const linked = await this.workspace.prepareTaskDependencies(workspace.path, this.config.worker.shareDependencyDirs);
+      if (!runtime.setupComplete && this.config.worker.setupCommands.length) {
+        if (!this.hooks.projectTrusted) throw new Error(`${task.id} setupCommands 仅允许在受信任项目中执行`);
+        const setup = await verifyCommands(this.config.worker.setupCommands, workspace.path, this.config.worker.setupTimeoutSec, {
+          allowedPrefixes: this.config.run.setupAllowedPrefixes,
+        });
+        if (!setup.ok) {
+          const failed = setup.commands.find((command) => command.exitCode !== 0);
+          throw new Error(`${task.id} worktree setup 失败: ${failed?.stderr || failed?.stdout || failed?.command || "unknown"}`);
+        }
+      }
+      runtime.setupComplete = true;
+      if (linked.length) runtime.currentAction = `shared dependencies: ${linked.join(", ")}`;
+      await this.persist();
       const skipInitialTurn = priorStatus === "detached" || priorStatus === "verifying" || priorStatus === "merging" || priorStatus === "done" || runtime.verification?.ok;
       if (!skipInitialTurn) {
         const worker = await ensureHandle();
@@ -362,7 +448,19 @@ export class Orchestrator {
       }
       if (!runtime.verification?.ok) throw new Error(`${task.id} 验证未通过`);
       await this.controlCheckpoint(runtime);
-      await this.workspace.commitTask(task, workspace.path);
+      const committed = await this.workspace.commitTask(task, workspace.path, {
+        allowlist: this.config.worker.scopeAllowlist,
+        violationPolicy: this.config.worker.scopeViolationPolicy,
+        ephemeralPaths: this.config.worker.shareDependencyDirs,
+      });
+      if (committed.reverted.length) {
+        runtime.revertedScopePaths = Array.from(new Set([...(runtime.revertedScopePaths ?? []), ...committed.reverted]));
+        runtime.scopeViolations.push(`reverted out-of-scope changes: ${committed.reverted.join(", ")}`);
+        runtime.currentAction = `reverted ${committed.reverted.length} out-of-scope path(s)`;
+        const postScopeVerification = await this.verifyControlled(task.id, commands, workspace.path, runtime);
+        runtime.verification = postScopeVerification;
+        if (!postScopeVerification.ok) throw new Error(`${task.id} 越界文件回滚后验证失败`);
+      }
       await handle?.stop();
       return { task, runtime, handle };
     } catch (error) {
@@ -380,6 +478,149 @@ export class Orchestrator {
     } finally {
       this.handles.delete(task.id);
     }
+  }
+
+  private async runTaskPool(tasks: Subtask[]): Promise<void> {
+    const descriptors = tasks.flatMap((task) => this.config.worker.bestOfN === 1
+      ? [{ parent: task, attempt: task }]
+      : Array.from({ length: this.config.worker.bestOfN }, (_, index) => ({
+          parent: task,
+          attempt: { ...task, id: attemptId(task.id, index + 1), title: `${task.title} · candidate ${index + 1}` },
+        })));
+    const remaining = new Map(tasks.map((task) => [task.id, this.config.worker.bestOfN]));
+    const preparedByTask = new Map<string, PreparedWorker[]>();
+    const selectionPromises: Promise<void>[] = [];
+    let cursor = 0;
+    const runSlot = async () => {
+      while (true) {
+        const index = cursor++;
+        const descriptor = descriptors[index];
+        if (!descriptor) return;
+        await this.controlCheckpoint();
+        const prepared = await this.runWorkerTask(descriptor.attempt);
+        if (prepared) {
+          const group = preparedByTask.get(descriptor.parent.id) ?? [];
+          group.push(prepared);
+          preparedByTask.set(descriptor.parent.id, group);
+        }
+        const count = (remaining.get(descriptor.parent.id) ?? 1) - 1;
+        remaining.set(descriptor.parent.id, count);
+        if (count === 0) {
+          selectionPromises.push(this.finalizeAttempts(descriptor.parent, descriptors.filter((item) => item.parent.id === descriptor.parent.id).map((item) => item.attempt), preparedByTask.get(descriptor.parent.id) ?? []));
+        }
+      }
+    };
+    const slots = Math.min(this.config.worker.maxConcurrency, descriptors.length);
+    await Promise.all(Array.from({ length: slots }, () => runSlot()));
+    await Promise.all(selectionPromises);
+  }
+
+  private async finalizeAttempts(parent: Subtask, attempts: Subtask[], prepared: PreparedWorker[]): Promise<void> {
+    if (attempts.length === 1) {
+      if (prepared[0]) await this.mergePreparedSafely(prepared[0]);
+      return;
+    }
+    const runtimes = attempts.map((attempt) => this.run.workers[attempt.id]).filter((runtime): runtime is WorkerRuntime => Boolean(runtime));
+    const summaries = runtimes.map((runtime) => ({
+      id: runtime.subtaskId,
+      status: runtime.status,
+      branch: runtime.branch,
+      retries: runtime.retries,
+      cost: runtime.usage.cost,
+      verificationOk: Boolean(runtime.verification?.ok),
+    }));
+    if (!prepared.length) {
+      const representative = runtimes.sort(compareAttemptRuntime)[0];
+      if (representative) {
+        for (const attempt of attempts) delete this.run.workers[attempt.id], this.runtimes.delete(attempt.id);
+        representative.subtaskId = parent.id;
+        representative.status = "failed";
+        representative.competition = { winner: summaries[0]?.id ?? attempts[0]!.id, attempts: summaries };
+        this.run.workers[parent.id] = representative;
+      }
+      await this.persist();
+      return;
+    }
+    const winner = await this.selectBestAttempt(parent, prepared);
+    for (const item of prepared) {
+      if (item === winner) continue;
+      await this.workspace.discardTaskWorktree(item.runtime.worktree, item.runtime.branch).catch(() => undefined);
+    }
+    for (const attempt of attempts) delete this.run.workers[attempt.id], this.runtimes.delete(attempt.id);
+    winner.runtime.subtaskId = parent.id;
+    winner.runtime.competition = { winner: winner.task.id, attempts: summaries };
+    this.run.workers[parent.id] = winner.runtime;
+    winner.task = parent;
+    await this.persist();
+    await this.mergePreparedSafely(winner);
+  }
+
+  private async selectBestAttempt(parent: Subtask, prepared: PreparedWorker[]): Promise<PreparedWorker> {
+    if (this.config.worker.bestOfNJudge && prepared.length > 1) {
+      const judgeTask: Subtask = {
+        id: `judge-${attemptId(parent.id, Date.now())}`.slice(0, 64),
+        title: `select best candidate for ${parent.id}`,
+        goal: "Select the strongest verified implementation without modifying files.",
+        role: "candidate-reviewer",
+        rolePrompt: "You are a read-only candidate reviewer. Inspect candidate branch diffs and return exactly WINNER: <candidate-id> plus a short reason.",
+        ownedPaths: [], readPaths: ["**"], dependsOn: [], contracts: parent.contracts,
+        acceptance: { commands: [], criteria: ["One verified candidate is selected"] },
+        model: parent.model,
+      };
+      const handle = await this.createIntegrationWorker(judgeTask, parent.model);
+      const operation = this.activeOperation();
+      if (operation) {
+        const runtime = this.syntheticRuntime(judgeTask, operation.candidateWorktree, operation.candidateBranch);
+        try {
+          const choices = prepared.map((item) => `- ${item.task.id}: branch=${item.runtime.branch}; retries=${item.runtime.retries}; cost=$${item.runtime.usage.cost.toFixed(4)}; inspect with git diff ${operation.preMergeSha}...${item.runtime.branch}`).join("\n");
+          await this.runControlledPrompt(handle, runtime, `Choose the best implementation for task ${parent.id}. All candidates passed acceptance. Compare correctness, scope discipline, maintainability, and diff minimality.\n${choices}\nReturn WINNER: <candidate-id>. Do not edit files.`, "working");
+          const selected = prepared.find((item) => new RegExp(`WINNER\\s*:\\s*${escapeRegExp(item.task.id)}\\b`, "i").test(runtime.lastText ?? ""));
+          if (selected) return selected;
+        } catch { /* Deterministic fallback below. */ }
+        finally {
+          await handle.stop().catch(() => undefined);
+          this.handles.delete(judgeTask.id);
+        }
+      }
+    }
+    return [...prepared].sort((a, b) => compareAttemptRuntime(a.runtime, b.runtime))[0]!;
+  }
+
+  private async mergePreparedSafely(prepared: PreparedWorker): Promise<void> {
+    try {
+      await this.enqueueMerge(prepared);
+    } catch (error) {
+      prepared.runtime.status = "failed";
+      prepared.runtime.currentAction = error instanceof Error ? error.message : String(error);
+      prepared.runtime.endedAt = Date.now();
+      await this.persist();
+      if (this.config.run.failurePolicy === "fail-fast") throw error;
+    }
+  }
+
+  private enqueueMerge(item: PreparedWorker): Promise<void> {
+    const next = this.mergeChain.then(() => this.mergePrepared(item), () => this.mergePrepared(item));
+    this.mergeChain = next.catch(() => undefined);
+    return next;
+  }
+
+  private markBlocked(task: Subtask, blockedBy: string[]): void {
+    const runtime = this.run.workers[task.id] ?? (this.run.workers[task.id] = {
+      subtaskId: task.id,
+      status: "blocked",
+      worktree: "",
+      branch: `swarm/${this.run.runId}/${task.id}`,
+      currentAction: "blocked by failed dependency",
+      usage: emptyUsage(),
+      turns: 0,
+      retries: 0,
+      pendingUi: [],
+      lastEventAt: Date.now(),
+      scopeViolations: [],
+    });
+    runtime.status = "blocked";
+    runtime.blockedBy = blockedBy;
+    runtime.currentAction = `blocked by: ${blockedBy.join(", ")}`;
   }
 
   private async runControlledPrompt(handle: WorkerHandle, runtime: WorkerRuntime, firstPrompt: string, activeStatus: "working" | "fixing"): Promise<void> {
@@ -481,6 +722,7 @@ export class Orchestrator {
   private async verifyIntegration(full: boolean): Promise<void> {
     let operation = this.activeOperation();
     let target = operation?.candidateWorktree ?? this.run.git!.integrationWorktree;
+    await this.prepareVerificationEnvironment(target, operation);
     const commands = full
       ? this.config.run.verify.full ?? await detectVerificationCommands(target, true)
       : this.config.run.verify.integrationLight ?? await detectVerificationCommands(target, false);
@@ -501,6 +743,7 @@ export class Orchestrator {
       if (!operation) {
         operation = await this.ensureCandidate("repair", `repair:${Date.now()}`);
         target = operation.candidateWorktree;
+        await this.prepareVerificationEnvironment(target, operation);
       }
       await this.runIntegrationFixer(commands, result);
       result = await this.verifyControlled(full ? "integration-full" : "integration-light", commands, target);
@@ -512,6 +755,22 @@ export class Orchestrator {
       operation.phase = "verified";
       operation.candidateSha = await this.workspace.commitIntegration("swarm: persist verified candidate", operation) ?? operation.candidateSha;
       operation.updatedAt = Date.now();
+      await this.persist();
+    }
+  }
+
+  private async prepareVerificationEnvironment(target: string, operation?: GitMergeOperation): Promise<void> {
+    await this.workspace.prepareTaskDependencies(target, this.config.worker.shareDependencyDirs);
+    const setupComplete = operation ? operation.setupComplete : this.run.integrationSetupComplete;
+    if (!setupComplete && this.config.worker.setupCommands.length) {
+      if (!this.hooks.projectTrusted) throw new Error("integration setupCommands 仅允许在受信任项目中执行");
+      const setup = await verifyCommands(this.config.worker.setupCommands, target, this.config.worker.setupTimeoutSec, { allowedPrefixes: this.config.run.setupAllowedPrefixes });
+      if (!setup.ok) {
+        const failed = setup.commands.find((command) => command.exitCode !== 0);
+        throw new Error(`integration setup 失败: ${failed?.stderr || failed?.stdout || failed?.command || "unknown"}`);
+      }
+      if (operation) operation.setupComplete = true;
+      else this.run.integrationSetupComplete = true;
       await this.persist();
     }
   }
@@ -550,7 +809,7 @@ export class Orchestrator {
     await ensurePrivateDir(promptDir);
     const promptPath = join(promptDir, `${task.id}.md`);
     await writeFile(promptPath, task.rolePrompt, { mode: 0o600 });
-    const guardPath = await writeGuardExtension({ runDir: this.run.runDir, worktree: targetWorktree, heartbeatFile: join(this.run.runDir, "heartbeat"), task, trusted: this.hooks.projectTrusted, config: this.config });
+    const guardPath = await writeGuardExtension({ runDir: this.run.runDir, worktree: targetWorktree, heartbeatFile: join(this.run.runDir, "heartbeat"), task, trusted: this.hooks.projectTrusted, config: this.config, peers: [] });
     const handle = this.workerFactory({ id: task.id, title: task.title, worktree: targetWorktree, runDir: this.run.runDir, guardPath, promptPath, sessionDir: join(this.run.runDir, "sessions", task.id), model: model ?? this.config.worker.model, tools: this.config.worker.tools, projectTrusted: this.hooks.projectTrusted, safetyGuardPath: await this.resolveSafetyGuard() });
     this.handles.set(task.id, handle);
     return handle;
@@ -628,6 +887,13 @@ export class Orchestrator {
     const usageBase = { ...runtime.usage };
     const turnsBase = runtime.turns;
     handle.on("state", (state) => { runtime.sessionFile = state.sessionFile; runtime.pid = handle.pid; runtime.pidStartedAt = Date.now(); runtime.pidMarker = state.pidMarker; this.schedulePersist(); });
+    handle.on("tool", ({ active, reset }) => {
+      runtime.activeTools = reset ? 0 : Math.max(0, (runtime.activeTools ?? 0) + (active ? 1 : -1));
+      runtime.activeToolStartedAt = runtime.activeTools > 0 ? runtime.activeToolStartedAt ?? Date.now() : undefined;
+      runtime.lastEventAt = Date.now();
+      runtime.stallCount = 0;
+      this.schedulePersist();
+    });
     handle.on("action", ({ label }) => { runtime.currentAction = label; runtime.lastEventAt = Date.now(); runtime.stallCount = 0; if (label.startsWith("⚠")) runtime.scopeViolations.push(label); this.schedulePersist(); });
     handle.on("text", ({ text }) => { runtime.lastText = truncateTail(text, 8_000); runtime.completionReport = extractCompletionReport(text); runtime.lastEventAt = Date.now(); runtime.stallCount = 0; this.schedulePersist(); });
     handle.on("usage", ({ usage, turns }) => {
@@ -647,7 +913,7 @@ export class Orchestrator {
       this.schedulePersist();
     });
     handle.on("retrying", ({ attempt, maxAttempts }) => { runtime.currentAction = `rate-limit retry ${attempt}/${maxAttempts}`; runtime.lastEventAt = Date.now(); this.schedulePersist(); });
-    handle.on("ui", ({ request }) => { void this.enqueueInteraction(async () => this.routeUi(handle, runtime, request)); });
+    handle.on("ui", ({ request }) => { void this.queueUi(handle, runtime, request); });
     handle.on("exit", ({ code, stderr }) => { if (!["done", "failed", "killed", "detached"].includes(runtime.status) && code !== 0) runtime.currentAction = `worker exit ${code}: ${truncateTail(stderr, 500)}`; this.schedulePersist(); });
   }
 
@@ -694,20 +960,46 @@ export class Orchestrator {
     await this.persist();
   }
 
-  private async routeUi(handle: WorkerHandle, runtime: WorkerRuntime, request: PendingUiRequest & Record<string, unknown>): Promise<void> {
+  private async queueUi(handle: WorkerHandle, runtime: WorkerRuntime, request: PendingUiRequest & Record<string, unknown>): Promise<void> {
     const dialog = ["select", "confirm", "input", "editor"].includes(request.method);
     if (!dialog) return;
     const previous = runtime.status;
     runtime.status = "awaiting";
     runtime.pendingUi.push(request);
     await this.persist();
-    let response: Record<string, unknown>;
-    if (this.config.approvalPolicy === "autoDeny") response = { id: request.id, cancelled: true };
-    else if (this.config.approvalPolicy === "autoAllow") response = request.method === "confirm" ? { id: request.id, confirmed: true } : { id: request.id, value: request.options?.[0] ?? "" };
-    else response = await this.hooks.onUi(runtime.subtaskId, request);
-    try { handle.respondUi(response); } catch { /* Worker may have been paused or stopped while awaiting UI. */ }
-    runtime.pendingUi = runtime.pendingUi.filter((item) => item.id !== request.id);
-    if (runtime.status === "awaiting" && !runtime.pendingUi.length && !this.budgetBlocked.has(runtime.subtaskId)) runtime.status = previous;
+    this.uiBatch.push({ handle, runtime, request: { ...request, _previousStatus: previous } });
+    if (this.uiBatchTimer) return;
+    this.uiBatchTimer = setTimeout(() => {
+      this.uiBatchTimer = undefined;
+      void this.enqueueInteraction(() => this.flushUiBatch());
+    }, this.config.ui.approvalBatchMs);
+    this.uiBatchTimer.unref();
+  }
+
+  private async flushUiBatch(): Promise<void> {
+    const batch = this.uiBatch.splice(0);
+    if (!batch.length) return;
+    let responses: Record<string, Record<string, unknown>> = {};
+    if (this.config.approvalPolicy === "route" && batch.length > 1 && this.hooks.onUiBatch) {
+      try { responses = await this.hooks.onUiBatch(batch.map((item) => ({ workerId: item.runtime.subtaskId, request: item.request }))); }
+      catch { responses = {}; }
+    }
+    for (const item of batch) {
+      const { handle, runtime, request } = item;
+      let response = responses[uiResponseKey(runtime.subtaskId, request.id)] ?? responses[request.id];
+      if (!response) {
+        if (this.config.approvalPolicy === "autoDeny") response = { id: request.id, cancelled: true };
+        else if (this.config.approvalPolicy === "autoAllow") response = autoAllowUi(request);
+        else {
+          try { response = await this.hooks.onUi(runtime.subtaskId, request); }
+          catch { response = { id: request.id, cancelled: true }; }
+        }
+      }
+      try { handle.respondUi(response); } catch { /* Worker may have been paused or stopped while awaiting UI. */ }
+      runtime.pendingUi = runtime.pendingUi.filter((pending) => pending.id !== request.id);
+      const previous = String((request as any)._previousStatus ?? "working") as WorkerRuntime["status"];
+      if (runtime.status === "awaiting" && !runtime.pendingUi.length && !this.budgetBlocked.has(runtime.subtaskId)) runtime.status = previous;
+    }
     await this.persist();
   }
 
@@ -749,7 +1041,8 @@ export class Orchestrator {
   private workerBrief(task: Subtask): string {
     const contracts = this.run.plan!.contracts.filter((contract) => task.contracts.includes(contract.id));
     const upstream = task.dependsOn.map((id) => this.run.workers[id]?.completionReport).filter(Boolean).join("\n\n");
-    return `You are agent ${task.role} in a swarm working on: ${this.run.plan!.taskSummary}.\n\nMISSION\n${task.goal}\n\nCONTRACTS\n${contracts.map((contract) => `${contract.id}: ${contract.definition}`).join("\n") || "None"}\n\nSCOPE\nOwned: ${task.ownedPaths.join(", ")}\nRead context: ${task.readPaths.join(", ")}\nDo not modify other paths. Git commits and pushes are owned by the orchestrator.\n\nUPSTREAM\n${upstream || "None"}\n\nACCEPTANCE\n${task.acceptance.commands.join("\n")}\n${task.acceptance.criteria.join("\n")}\n\nWork autonomously. Finish with ## Completion Report containing what changed, files changed, verification, and follow-ups.`;
+    const peers = [...this.run.plan!.subtasks.filter((peer) => peer.id !== task.id).map((peer) => peer.id), "lead"];
+    return `You are agent ${task.role} in a swarm working on: ${this.run.plan!.taskSummary}.\n\nMISSION\n${task.goal}\n\nCONTRACTS\n${contracts.map((contract) => `${contract.id}: ${contract.definition}`).join("\n") || "None"}\n\nSCOPE\nOwned: ${task.ownedPaths.join(", ")}\nShared metadata: ${[...(task.sharedPaths ?? []), ...this.config.worker.scopeAllowlist].join(", ") || "None"}\nGenerated: ${(task.generatedPaths ?? []).join(", ") || "None"}\nRead context: ${task.readPaths.join(", ")}\nDo not modify other paths. Git commits and pushes are owned by the orchestrator. Use write/edit for content and swarm_fs for mkdir, touch, copy, move, or delete; do not fight the bash guard.\n\nPEERS\n${peers.join(", ") || "None"}. Use swarm_send only for concrete interface/blocker coordination, and check swarm_inbox when coordination is expected.\n\nUPSTREAM\n${upstream || "None"}\n\nACCEPTANCE\n${task.acceptance.commands.join("\n")}\n${task.acceptance.criteria.join("\n")}\n\nWork autonomously. Finish with ## Completion Report containing what changed, files changed, verification, and follow-ups.`;
   }
 
   private async resolveSafetyGuard(): Promise<string | undefined> {
@@ -780,13 +1073,60 @@ export class Orchestrator {
     this.heartbeatTimer.unref();
     this.stallTimer = setInterval(() => void this.checkStalls(), Math.min(10_000, Math.max(1_000, this.config.worker.stallSec * 250)));
     this.stallTimer.unref();
+    this.mailboxTimer = setInterval(() => void this.deliverMailboxMessages(), 1_000);
+    this.mailboxTimer.unref();
+  }
+
+  private async deliverMailboxMessages(): Promise<void> {
+    await this.deliverLeadMailbox();
+    for (const [id, handle] of this.handles) {
+      const runtime = this.runtimes.get(id) ?? this.run.workers[id];
+      if (!runtime || !handle.running || !["working", "fixing"].includes(runtime.status)) continue;
+      const path = join(this.run.runDir, "mailbox", `${id}.jsonl`);
+      let raw: string;
+      try { raw = await readFile(path, "utf8"); } catch { continue; }
+      const offset = Math.min(runtime.mailboxOffset ?? 0, Buffer.byteLength(raw));
+      const data = Buffer.from(raw).subarray(offset).toString("utf8");
+      if (!data.trim()) continue;
+      const messages: string[] = [];
+      for (const line of data.trim().split("\n")) {
+        try {
+          const item = JSON.parse(line) as { from?: string; message?: string };
+          if (item.from && item.message) messages.push(`[${item.from}] ${String(item.message).slice(0, 4_000)}`);
+        } catch { /* Leave malformed mailbox data inspectable without injecting it. */ }
+      }
+      runtime.mailboxOffset = Buffer.byteLength(raw);
+      if (messages.length) {
+        runtime.currentAction = `received ${messages.length} peer message(s)`;
+        runtime.lastEventAt = Date.now();
+        await handle.steer(`SWARM MAILBOX\n${messages.join("\n\n")}\nAcknowledge or act only if relevant to your owned task.`).catch(() => undefined);
+      }
+      this.schedulePersist();
+    }
+  }
+
+  private async deliverLeadMailbox(): Promise<void> {
+    const path = join(this.run.runDir, "mailbox", "lead.jsonl");
+    let raw: string;
+    try { raw = await readFile(path, "utf8"); } catch { return; }
+    const offset = Math.min(this.run.leadMailboxOffset ?? 0, Buffer.byteLength(raw));
+    const data = Buffer.from(raw).subarray(offset).toString("utf8");
+    if (!data.trim()) return;
+    this.run.leadMailboxOffset = Buffer.byteLength(raw);
+    for (const line of data.trim().split("\n")) {
+      try {
+        const item = JSON.parse(line) as { from?: string; message?: string };
+        if (item.from && item.message) await this.hooks.onLeadMessage?.(item.from, String(item.message).slice(0, 4_000));
+      } catch { /* Ignore malformed mailbox records. */ }
+    }
+    this.schedulePersist();
   }
 
   private async checkStalls(): Promise<void> {
     const now = Date.now();
     for (const [id, handle] of this.handles) {
       const runtime = this.runtimes.get(id) ?? this.run.workers[id];
-      if (!runtime || !["working", "fixing"].includes(runtime.status) || now - runtime.lastEventAt < this.config.worker.stallSec * 1000) continue;
+      if (!runtime || !["working", "fixing"].includes(runtime.status) || (runtime.activeTools ?? 0) > 0 || now - runtime.lastEventAt < this.config.worker.stallSec * 1000) continue;
       if ((runtime.stallCount ?? 0) === 0) {
         runtime.stallCount = 1;
         runtime.lastEventAt = now;
@@ -805,8 +1145,12 @@ export class Orchestrator {
   private stopMonitors(): void {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     if (this.stallTimer) clearInterval(this.stallTimer);
+    if (this.mailboxTimer) clearInterval(this.mailboxTimer);
     this.heartbeatTimer = undefined;
     this.stallTimer = undefined;
+    this.mailboxTimer = undefined;
+    if (this.uiBatchTimer) clearTimeout(this.uiBatchTimer);
+    this.uiBatchTimer = undefined;
   }
 
   private async stopAll(): Promise<void> {
@@ -850,6 +1194,57 @@ function extractCompletionReport(text: string): string {
   return index === -1 ? truncateTail(text, 2_000) : text.slice(index, index + 4_000);
 }
 
+function stableTaskShape(task: Subtask): unknown {
+  return {
+    id: task.id,
+    goal: task.goal,
+    ownedPaths: task.ownedPaths,
+    sharedPaths: task.sharedPaths ?? [],
+    generatedPaths: task.generatedPaths ?? [],
+    dependsOn: task.dependsOn,
+    contracts: task.contracts,
+  };
+}
+
+function autoAllowUi(request: PendingUiRequest): Record<string, unknown> {
+  return request.method === "confirm"
+    ? { id: request.id, confirmed: true }
+    : { id: request.id, value: request.options?.[0] ?? request.prefill ?? "" };
+}
+
+function uiResponseKey(workerId: string, requestId: string): string {
+  return `${workerId}:${requestId}`;
+}
+
+function attemptId(parentId: string, index: number): string {
+  return `${parentId.slice(0, 46)}-try-${String(index)}`.slice(0, 64);
+}
+
+function compareAttemptRuntime(left: WorkerRuntime, right: WorkerRuntime): number {
+  const leftVerified = left.verification?.ok ? 0 : 1;
+  const rightVerified = right.verification?.ok ? 0 : 1;
+  return leftVerified - rightVerified
+    || (left.scopeViolations.length - right.scopeViolations.length)
+    || (left.retries - right.retries)
+    || (left.usage.cost - right.usage.cost)
+    || left.subtaskId.localeCompare(right.subtaskId);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
+function powershellQuote(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+export function buildManualTakeoverCommand(worktree: string, runDir: string, args: string[], platform: NodeJS.Platform = process.platform): string {
+  if (platform === "win32") {
+    return `Set-Location -LiteralPath ${powershellQuote(worktree)}; $env:PI_SWARM_WORKER='1'; $env:PI_SWARM_RUN_DIR=${powershellQuote(runDir)}; & ${args.map(powershellQuote).join(" ")}`;
+  }
+  return `cd ${shellQuote(worktree)} && env PI_SWARM_WORKER=1 PI_SWARM_RUN_DIR=${shellQuote(runDir)} ${args.map(shellQuote).join(" ")}`;
 }

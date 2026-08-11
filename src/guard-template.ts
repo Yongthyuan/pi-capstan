@@ -10,6 +10,7 @@ export interface GuardOptions {
   task: Subtask;
   trusted: boolean;
   config: SwarmConfig;
+  peers?: string[];
 }
 
 export async function writeGuardExtension(options: GuardOptions): Promise<string> {
@@ -25,11 +26,14 @@ export function buildGuardSource(options: GuardOptions): string {
   const payload = JSON.stringify({
     worktree: options.worktree,
     heartbeatFile: options.heartbeatFile,
-    ownedPaths: options.task.ownedPaths,
+    ownedPaths: [...options.task.ownedPaths, ...(options.task.sharedPaths ?? []), ...(options.task.generatedPaths ?? []), ...options.config.worker.scopeAllowlist],
     denylist: options.config.bashDenylist,
     trusted: options.trusted,
+    taskId: options.task.id,
+    peers: options.peers ?? [],
+    mailboxDir: join(options.runDir, "mailbox"),
   });
-  return `import { existsSync, realpathSync, statSync } from "node:fs";
+  return `import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 	import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
@@ -68,7 +72,70 @@ function canonical(path: string): string {
   return resolve(realpathSync(cursor), ...suffix);
 }
 
+function scoped(path: string): { target: string; rel: string } {
+  const target = canonical(path);
+  const rel = relative(root, target).replaceAll("\\\\", "/");
+  if (!rel || rel === ".." || rel.startsWith("../") || isAbsolute(rel) || !owned.some((rx: RegExp) => rx.test(rel))) {
+    throw new Error("scope violation: " + target);
+  }
+  return { target, rel };
+}
+
+const objectSchema = (properties: Record<string, unknown>, required: string[]) => ({ type: "object", properties, required, additionalProperties: false }) as any;
+const stringSchema = { type: "string" };
+
 export default function(pi: ExtensionAPI) {
+  pi.registerTool({
+    name: "swarm_send",
+    label: "Send Swarm Message",
+    description: "Send a concise coordination message to a peer worker in this run.",
+    parameters: objectSchema({ to: { type: "string", enum: cfg.peers }, message: stringSchema }, ["to", "message"]),
+    async execute(_id: string, input: { to: string; message: string }) {
+      if (!cfg.peers.includes(input.to) || input.to === cfg.taskId) return { content: [{ type: "text", text: "invalid peer" }], isError: true };
+      const message = String(input.message ?? "").slice(0, 4000);
+      if (!message.trim()) return { content: [{ type: "text", text: "empty message" }], isError: true };
+      mkdirSync(cfg.mailboxDir, { recursive: true, mode: 0o700 });
+      appendFileSync(resolve(cfg.mailboxDir, input.to + ".jsonl"), JSON.stringify({ from: cfg.taskId, to: input.to, message, ts: Date.now() }) + "\\n", { mode: 0o600 });
+      return { content: [{ type: "text", text: "message queued for " + input.to }] };
+    },
+  } as any);
+  pi.registerTool({
+    name: "swarm_inbox",
+    label: "Read Swarm Inbox",
+    description: "Read recent messages from peer workers.",
+    parameters: objectSchema({}, []),
+    async execute() {
+      const path = resolve(cfg.mailboxDir, cfg.taskId + ".jsonl");
+      const lines = existsSync(path) ? readFileSync(path, "utf8").trim().split("\\n").filter(Boolean).slice(-50) : [];
+      return { content: [{ type: "text", text: lines.length ? lines.join("\\n") : "inbox empty" }] };
+    },
+  } as any);
+  pi.registerTool({
+    name: "swarm_fs",
+    label: "Scoped Filesystem Operation",
+    description: "Perform mkdir, touch, remove, move, or copy inside owned paths without shell mutation.",
+    parameters: objectSchema({ operation: { type: "string", enum: ["mkdir", "touch", "remove", "move", "copy"] }, path: stringSchema, destination: stringSchema }, ["operation", "path"]),
+    async execute(_id: string, input: { operation: string; path: string; destination?: string }) {
+      try {
+        const source = scoped(input.path);
+        if (input.operation === "mkdir") mkdirSync(source.target, { recursive: true });
+        else if (input.operation === "touch") { mkdirSync(dirname(source.target), { recursive: true }); writeFileSync(source.target, existsSync(source.target) ? readFileSync(source.target) : ""); }
+        else if (input.operation === "remove") rmSync(source.target, { recursive: true, force: true });
+        else {
+          if (!input.destination) throw new Error("destination is required");
+          const destination = scoped(input.destination);
+          mkdirSync(dirname(destination.target), { recursive: true });
+          if (input.operation === "move") renameSync(source.target, destination.target);
+          else if (input.operation === "copy") cpSync(source.target, destination.target, { recursive: true, force: false });
+          else throw new Error("unsupported operation");
+        }
+        return { content: [{ type: "text", text: input.operation + " completed for " + source.rel }] };
+      } catch (error) {
+        console.error("SWARM_VIOLATION " + String(error));
+        return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], isError: true };
+      }
+    },
+  } as any);
   pi.on("project_trust", () => ({ trusted: cfg.trusted ? "yes" : "no" }));
   pi.on("session_start", () => {
     heartbeat = setInterval(() => {

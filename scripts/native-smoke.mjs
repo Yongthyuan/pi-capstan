@@ -12,9 +12,11 @@ const sessions = join(root, "sessions");
 await mkdir(agentDir, { recursive: true });
 await mkdir(sessions, { recursive: true });
 await mkdir(join(agentDir, "extensions"), { recursive: true });
-await symlink(process.cwd(), join(agentDir, "extensions", "swarm"), "dir");
+await symlink(process.cwd(), join(agentDir, "extensions", "swarm"), process.platform === "win32" ? "junction" : "dir");
 
-const child = spawn(process.env.PI_SWARM_PI_BIN ?? "pi", [
+const piCli = join(process.cwd(), "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
+const child = spawn(process.execPath, [
+  piCli,
   "--mode", "rpc",
   "--offline",
   "--session-dir", sessions,
@@ -66,7 +68,8 @@ try {
   await mkdir(runDir, { recursive: true });
   await writeFile(join(runDir, "heartbeat"), String(Date.now()));
   const task = { id: "native-worker", title: "native worker", goal: "smoke", role: "smoke", rolePrompt: "smoke", ownedPaths: ["**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: [], criteria: [] } };
-  const guardPath = await writeGuardExtension({ runDir, worktree, heartbeatFile: join(runDir, "heartbeat"), task, trusted: false, config: structuredClone(DEFAULT_CONFIG) });
+  const workerConfig = structuredClone(DEFAULT_CONFIG);
+  const guardPath = await writeGuardExtension({ runDir, worktree, heartbeatFile: join(runDir, "heartbeat"), task, trusted: false, config: workerConfig, peers: ["peer-worker"] });
   const promptPath = join(runDir, "prompt.md");
   await writeFile(promptPath, "Native worker smoke test.");
   const worker = new WorkerHandle({
@@ -77,8 +80,10 @@ try {
     guardPath,
     promptPath,
     sessionDir: join(runDir, "sessions"),
-    tools: ["read"],
+    tools: workerConfig.worker.tools,
     projectTrusted: false,
+    piCommand: process.execPath,
+    piArgsPrefix: [piCli],
     extraEnv: { PI_CODING_AGENT_DIR: agentDir, PI_OFFLINE: "1" },
   });
   await worker.start();

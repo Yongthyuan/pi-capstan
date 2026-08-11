@@ -3,7 +3,8 @@ import { runCommand } from "./utils.ts";
 export async function processMarker(pid: number): Promise<string | undefined> {
   if (!Number.isInteger(pid) || pid <= 0) return undefined;
   try {
-    const result = await runCommand("ps", ["-o", "lstart=", "-p", String(pid)], { timeoutMs: 5_000 });
+    const spec = processMarkerCommand(process.platform, pid);
+    const result = await runCommand(spec.command, spec.args, { timeoutMs: 5_000 });
     if (result.exitCode !== 0) return undefined;
     const marker = result.stdout.trim().replace(/\s+/g, " ");
     return marker || undefined;
@@ -32,14 +33,28 @@ export async function processIdentityStatus(pid: number | undefined, expectedMar
 
 export async function stopOwnedProcess(pid: number, expectedMarker: string, graceMs = 2_000): Promise<boolean> {
   if (await processIdentityStatus(pid, expectedMarker) !== "match") return false;
-  signal(pid, "SIGTERM");
+  if (process.platform === "win32") await runCommand("taskkill", ["/PID", String(pid), "/T"], { timeoutMs: 5_000 }).catch(() => undefined);
+  else signal(pid, "SIGTERM");
   const deadline = Date.now() + graceMs;
   while (Date.now() < deadline) {
     if (await processIdentityStatus(pid, expectedMarker) === "dead") return true;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  if (await processIdentityStatus(pid, expectedMarker) === "match") signal(pid, "SIGKILL");
+  if (await processIdentityStatus(pid, expectedMarker) === "match") {
+    if (process.platform === "win32") await runCommand("taskkill", ["/PID", String(pid), "/T", "/F"], { timeoutMs: 5_000 }).catch(() => undefined);
+    else signal(pid, "SIGKILL");
+  }
   return true;
+}
+
+export function processMarkerCommand(platform: NodeJS.Platform, pid: number): { command: string; args: string[] } {
+  if (platform === "win32") {
+    return {
+      command: "powershell.exe",
+      args: ["-NoProfile", "-NonInteractive", "-Command", `(Get-CimInstance Win32_Process -Filter \"ProcessId=${pid}\").CreationDate.ToUniversalTime().ToString(\"o\")`],
+    };
+  }
+  return { command: "ps", args: ["-o", "lstart=", "-p", String(pid)] };
 }
 
 function signal(pid: number, name: NodeJS.Signals): void {
