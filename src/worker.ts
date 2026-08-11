@@ -94,6 +94,10 @@ export class WorkerHandle {
       this.emitter.emit("exit", { code: code ?? 1, stderr: this.stderrTail });
     });
     child.on("close", () => {
+      child.stdin.destroy();
+      child.stdout.destroy();
+      child.stderr.destroy();
+      child.unref();
       if (this.child === child) this.child = undefined;
     });
     try {
@@ -159,6 +163,9 @@ export class WorkerHandle {
       const closed = waitForChildClose(child, Math.max(graceMs, 2_000));
       await runCommand("taskkill", ["/PID", String(pid), "/T", "/F"], { timeoutMs: 5_000 }).catch(() => undefined);
       await closed;
+      // Windows can report process/stdio closure just before the cwd handle is
+      // released. This bounded settle avoids transient EBUSY during cleanup.
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
       await this.logChain.catch(() => undefined);
       return;
     }

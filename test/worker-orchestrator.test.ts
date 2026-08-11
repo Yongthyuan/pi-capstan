@@ -30,7 +30,7 @@ test("worker handle speaks strict JSONL RPC", async () => {
     assert.equal(worker.sessionFile, join(root, "fake-session.jsonl"));
     await worker.stop(50);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
 
