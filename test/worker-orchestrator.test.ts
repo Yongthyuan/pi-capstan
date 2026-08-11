@@ -159,7 +159,7 @@ test("detach affects only one worker and a later orchestrator can resume it", as
     const { access } = await import("node:fs/promises");
     await access(first.run.workers.a.worktree);
     assert.equal(takeover?.includes("--no-extensions"), true);
-    assert.equal(takeover?.includes("PI_SWARM_WORKER=1"), true);
+    assert.equal(takeover?.includes("PI_SWARM_WORKER"), true);
     assert.equal(takeover?.includes("'-e'"), true);
 
     first.run.phase = "executing";

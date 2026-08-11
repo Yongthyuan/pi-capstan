@@ -90,6 +90,9 @@ function prepareVerificationCommand(command: string, cwd: string, allowedPrefixe
     const absolute = resolve(cwd, executable);
     const rel = relative(resolve(cwd), absolute);
     if (isAbsolute(rel) || rel === ".." || rel.startsWith("../")) throw new Error("verification executable must stay inside the worktree");
+    if (process.platform === "win32" && /\.(?:[cm]?js|ts)$/i.test(executable)) {
+      return { executable: process.execPath, args: [absolute, ...tokens.slice(1)] };
+    }
   }
   return { executable, args: tokens.slice(1) };
 }

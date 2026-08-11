@@ -125,8 +125,12 @@ function structuralNeighbors(file: string, content: string, files: string[]): st
 }
 
 async function listRepoFiles(repoRoot: string): Promise<string[]> {
-  const git = await runCommand("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: repoRoot });
-  if (git.exitCode === 0 && git.stdout.trim()) return git.stdout.trim().split("\n").filter(Boolean);
+  try {
+    const git = await runCommand("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: repoRoot });
+    if (git.exitCode === 0 && git.stdout.trim()) return git.stdout.trim().split("\n").filter(Boolean);
+  } catch (error: any) {
+    if (error?.code !== "ENOENT") throw error;
+  }
   const output: string[] = [];
   async function walk(root: string): Promise<void> {
     for (const entry of await readdir(root, { withFileTypes: true })) {

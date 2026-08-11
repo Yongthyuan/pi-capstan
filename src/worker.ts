@@ -3,7 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { dirname, join } from "node:path";
 import { appendFile } from "node:fs/promises";
 import type { PendingUiRequest, UsageTotals, WorkerEventMap } from "./types.ts";
-import { emptyUsage, ensurePrivateDir, truncateTail } from "./utils.ts";
+import { emptyUsage, ensurePrivateDir, runCommand, truncateTail } from "./utils.ts";
 import { processMarker } from "./process-identity.ts";
 
 export interface WorkerHandleOptions {
@@ -146,12 +146,19 @@ export class WorkerHandle {
     this.stopping = true;
     await this.abort().catch(() => undefined);
     const pid = child.pid;
+    if (process.platform === "win32") {
+      // Windows has no process-group SIGTERM equivalent. The RPC abort above is
+      // the graceful phase; taskkill is the bounded tree cleanup phase. Wait for
+      // the child exit event before callers remove its worktree or temp files.
+      await runCommand("taskkill", ["/PID", String(pid), "/T", "/F"], { timeoutMs: 5_000 }).catch(() => undefined);
+      await waitForChildExit(child, Math.max(graceMs, 2_000));
+      await this.logChain.catch(() => undefined);
+      return;
+    }
     signalProcess(pid, "SIGTERM");
-    await Promise.race([
-      new Promise<void>((resolve) => child.once("exit", () => resolve())),
-      new Promise<void>((resolve) => setTimeout(resolve, graceMs)),
-    ]);
+    await waitForChildExit(child, graceMs);
     if (this.child?.pid === pid) signalProcess(pid, "SIGKILL");
+    await waitForChildExit(child, 2_000);
     await this.logChain.catch(() => undefined);
   }
 
@@ -318,6 +325,14 @@ function signalProcess(pid: number, signal: NodeJS.Signals): void {
       // Already exited.
     }
   }
+}
+
+async function waitForChildExit(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await Promise.race([
+    new Promise<void>((resolve) => child.once("exit", () => resolve())),
+    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
 }
 
 function extractText(content: unknown): string {
