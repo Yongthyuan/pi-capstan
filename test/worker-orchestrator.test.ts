@@ -29,8 +29,11 @@ test("worker handle speaks strict JSONL RPC", async () => {
     assert.equal(worker.usage.output, 5);
     assert.equal(worker.sessionFile, join(root, "fake-session.jsonl"));
     await worker.stop(50);
+    assert.equal(worker.running, false);
   } finally {
-    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch((error: NodeJS.ErrnoException) => {
+      if (process.platform !== "win32" || error.code !== "EBUSY") throw error;
+    });
   }
 });
 
