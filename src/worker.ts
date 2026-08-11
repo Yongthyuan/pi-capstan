@@ -87,13 +87,14 @@ export class WorkerHandle {
       if (this.stopping) {
         this.finishStopped();
         this.emitter.emit("exit", { code: code ?? 0, stderr: this.stderrTail });
-        this.child = undefined;
         return;
       }
       const error = code === 0 ? undefined : new Error(`worker exited ${code}: ${truncateTail(this.stderrTail, 2000)}`);
       this.failAll(error ?? new Error("worker exited"));
       this.emitter.emit("exit", { code: code ?? 1, stderr: this.stderrTail });
-      this.child = undefined;
+    });
+    child.on("close", () => {
+      if (this.child === child) this.child = undefined;
     });
     try {
       const state = (await this.request("get_state", {}, 20_000)) as { sessionFile?: string; sessionId?: string; pidMarker?: string };
@@ -146,19 +147,29 @@ export class WorkerHandle {
     this.stopping = true;
     await this.abort().catch(() => undefined);
     const pid = child.pid;
-    if (process.platform === "win32") {
-      // Windows has no process-group SIGTERM equivalent. The RPC abort above is
-      // the graceful phase; taskkill is the bounded tree cleanup phase. Wait for
-      // the child exit event before callers remove its worktree or temp files.
-      await runCommand("taskkill", ["/PID", String(pid), "/T", "/F"], { timeoutMs: 5_000 }).catch(() => undefined);
-      await waitForChildExit(child, Math.max(graceMs, 2_000));
+    if (this.child !== child) {
       await this.logChain.catch(() => undefined);
       return;
     }
+    if (child.stdin.writable) child.stdin.end();
+    if (process.platform === "win32") {
+      // Windows has no process-group SIGTERM equivalent. The RPC abort above is
+      // the graceful phase; taskkill is the bounded tree cleanup phase. Wait for
+      // stdio closure before callers remove its worktree or temporary files.
+      const closed = waitForChildClose(child, Math.max(graceMs, 2_000));
+      await runCommand("taskkill", ["/PID", String(pid), "/T", "/F"], { timeoutMs: 5_000 }).catch(() => undefined);
+      await closed;
+      await this.logChain.catch(() => undefined);
+      return;
+    }
+    const gracefulClose = waitForChildClose(child, graceMs);
     signalProcess(pid, "SIGTERM");
-    await waitForChildExit(child, graceMs);
-    if (this.child?.pid === pid) signalProcess(pid, "SIGKILL");
-    await waitForChildExit(child, 2_000);
+    await gracefulClose;
+    if (this.child?.pid === pid) {
+      const forcedClose = waitForChildClose(child, 2_000);
+      signalProcess(pid, "SIGKILL");
+      await forcedClose;
+    }
     await this.logChain.catch(() => undefined);
   }
 
@@ -327,12 +338,16 @@ function signalProcess(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
-async function waitForChildExit(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  await Promise.race([
-    new Promise<void>((resolve) => child.once("exit", () => resolve())),
-    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-  ]);
+async function waitForChildClose(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      child.off("close", done);
+      resolve();
+    };
+    const timer = setTimeout(done, timeoutMs);
+    child.once("close", done);
+  });
 }
 
 function extractText(content: unknown): string {

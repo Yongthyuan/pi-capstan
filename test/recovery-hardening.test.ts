@@ -52,11 +52,13 @@ test("repo brief includes untracked content evidence with source line numbers", 
     await runCommand("git", ["init", "-q"], { cwd: root });
     await mkdir(join(root, "src"), { recursive: true });
     await writeFile(join(root, "src", "service.ts"), "export function authenticateUser() { return true; }\n");
-    const gitPath = (await runCommand("which", ["git"])).stdout.trim();
-    const bin = join(root, "bin");
-    await mkdir(bin);
-    await symlink(gitPath, join(bin, "git"));
-    process.env.PATH = bin;
+    if (process.platform !== "win32") {
+      const gitPath = (await runCommand("which", ["git"])).stdout.trim();
+      const bin = join(root, "bin");
+      await mkdir(bin);
+      await symlink(gitPath, join(bin, "git"));
+      process.env.PATH = bin;
+    }
     const brief = await buildRepoBrief(root, "fix authenticateUser behavior");
     assert.match(brief.evidence, /src\/service\.ts/);
     assert.match(brief.evidence, /1: export function authenticateUser/);
