@@ -1,6 +1,6 @@
 # Pi Agent Swarm
 
-Pi Agent Swarm 是一个面向 `@earendil-works/pi-coding-agent` 0.84.x 的原生多智能体扩展。它通过 `/swarm <task>` 完成复杂度门控、证据化拆解、计划确认、Git worktree 并行执行、验证、合并、恢复和报告回注。当前版本为 `0.4.0`，定位是可受控自用的 beta，而不是不可信代码的安全沙箱。已验证版本是 Pi 0.84.1；运行时还会检查必需 API 能力，支持范围为 `>=0.84.1 <0.85.0`。
+Pi Agent Swarm 是一个面向 `@earendil-works/pi-coding-agent` 0.84.x 的原生多智能体扩展。它通过 `/swarm <task>` 完成复杂度门控、证据化拆解、计划确认、Git worktree 并行执行、验证、合并、恢复和报告回注。当前版本为 `0.5.0`，定位是可受控自用的 beta，而不是不可信代码的安全沙箱。已验证版本是 Pi 0.84.1；运行时还会检查必需 API 能力，支持范围为 `>=0.84.1 <0.85.0`。
 
 ## 当前实现
 
