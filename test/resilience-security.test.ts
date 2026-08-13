@@ -9,7 +9,7 @@ import { createPlan } from "../src/planner.ts";
 import { pruneRunArtifacts } from "../src/state.ts";
 import { canonicalWriteTarget } from "../src/utils.ts";
 import { verifyCommands } from "../src/verifier.ts";
-import { buildGuardSource } from "../src/guard-template.ts";
+import { buildGuardSource, STRICT_BASH_DENYLIST } from "../src/guard-template.ts";
 
 test("verification rejects shell composition before spawning", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-verify-policy-"));
@@ -142,4 +142,37 @@ test("worker guard exposes scoped filesystem and mailbox tools", () => {
   const deny = DEFAULT_CONFIG.bashDenylist.map((value) => new RegExp(value, "i"));
   assert.equal(deny.some((expression) => expression.test("git -c user.name=x rm secret.txt")), true);
   assert.equal(deny.some((expression) => expression.test("git diff --stat HEAD")), false);
+});
+
+test("strict bash denylist blocks interpreter escapes without breaking module runs", () => {
+  const strict = STRICT_BASH_DENYLIST.map((value) => new RegExp(value, "i"));
+  const blocked = [
+    `python3 -c "open('../../x','w').write('x')"`,
+    `node -e "require('fs').writeFileSync('x','x')"`,
+    `bun --eval "1"`,
+    "perl -E 'say 1'",
+    "sh -c 'rm file'",
+    "find . -name '*.tmp' -delete",
+    "find src -exec touch {} +",
+  ];
+  for (const command of blocked) assert.equal(strict.some((expression) => expression.test(command)), true, command);
+  const allowed = [
+    "python -m pytest",
+    "node scripts/build.mjs",
+    "npm run build",
+    "bash tools/setup.sh",
+    "find src -name '*.ts'",
+  ];
+  for (const command of allowed) assert.equal(strict.some((expression) => expression.test(command)), false, command);
+  const config = structuredClone(DEFAULT_CONFIG);
+  config.worker.strictBash = true;
+  const source = buildGuardSource({
+    runDir: "/tmp/run",
+    worktree: "/tmp/worktree",
+    heartbeatFile: "/tmp/run/heartbeat",
+    task: { id: "a", title: "a", goal: "a", role: "a", rolePrompt: "a", ownedPaths: ["src/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: [], criteria: [] } },
+    trusted: true,
+    config,
+  });
+  assert.match(source, /--eval/);
 });

@@ -292,6 +292,7 @@ export interface SwarmConfig {
     shareDependencyDirs: string[];
     scopeAllowlist: string[];
     scopeViolationPolicy: "fail" | "revert";
+    strictBash: boolean;
     bestOfN: number;
     bestOfNJudge: boolean;
   };

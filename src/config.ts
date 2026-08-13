@@ -28,6 +28,7 @@ export const DEFAULT_CONFIG: SwarmConfig = {
     shareDependencyDirs: ["node_modules"],
     scopeAllowlist: ["package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb", "Cargo.lock", "poetry.lock", "uv.lock"],
     scopeViolationPolicy: "revert",
+    strictBash: false,
     bestOfN: 1,
     bestOfNJudge: true,
   },
@@ -163,6 +164,7 @@ export function validateConfig(config: SwarmConfig): SwarmConfig {
   if (!["route", "autoDeny", "autoAllow"].includes(config.approvalPolicy)) throw new Error("approvalPolicy 非法");
   if (!["branch", "apply", "commit"].includes(config.run.mergeStrategy)) throw new Error("run.mergeStrategy 非法");
   if (!["fail", "revert"].includes(config.worker.scopeViolationPolicy)) throw new Error("worker.scopeViolationPolicy 非法");
+  config.worker.strictBash = Boolean(config.worker.strictBash);
   if (!["fail-fast", "continue-independent"].includes(config.run.failurePolicy)) throw new Error("run.failurePolicy 非法");
   if (!["lexical", "hybrid"].includes(config.caseStore.matcher)) throw new Error("caseStore.matcher 非法");
   config.caseStore.max = clampInt(config.caseStore.max, 1, 10_000);

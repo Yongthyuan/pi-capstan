@@ -13,6 +13,19 @@ export interface GuardOptions {
   peers?: string[];
 }
 
+// Opt-in patterns closing the interpreter escape: the base denylist blocks
+// redirects and mutating commands, but inline code (python -c, node -e, ...)
+// can write anywhere. Off by default because it also blocks legitimate
+// read-only one-liners; tighten via worker.strictBash when the trade-off fits.
+export const STRICT_BASH_DENYLIST = [
+  "\\bpython[0-9.]*\\b[^\\n]*\\s-c\\b",
+  "\\b(?:ruby|perl)\\b[^\\n]*\\s-[eE]\\b",
+  "\\bphp\\b[^\\n]*\\s-r\\b",
+  "\\b(?:node|deno|bun)\\b[^\\n]*\\s(?:-e|--eval|-p|--print)\\b",
+  "\\b(?:sh|bash|zsh|dash|ksh|fish)\\b[^\\n]*\\s-c\\b",
+  "\\bfind\\b[^\\n]*\\s-(?:delete|exec|execdir|ok|okdir)\\b",
+];
+
 export async function writeGuardExtension(options: GuardOptions): Promise<string> {
   const guardDir = join(options.runDir, "guard");
   await ensurePrivateDir(guardDir);
@@ -27,7 +40,7 @@ export function buildGuardSource(options: GuardOptions): string {
     worktree: options.worktree,
     heartbeatFile: options.heartbeatFile,
     ownedPaths: [...options.task.ownedPaths, ...(options.task.sharedPaths ?? []), ...(options.task.generatedPaths ?? []), ...options.config.worker.scopeAllowlist],
-    denylist: options.config.bashDenylist,
+    denylist: [...options.config.bashDenylist, ...(options.config.worker.strictBash ? STRICT_BASH_DENYLIST : [])],
     trusted: options.trusted,
     taskId: options.task.id,
     peers: options.peers ?? [],
