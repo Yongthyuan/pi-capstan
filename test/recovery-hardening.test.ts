@@ -117,4 +117,7 @@ test("RPC logs remove prompts, commands and common credentials", () => {
   assert.equal(tool.includes("sk-secret"), false);
   const message = sanitizeRpcLogLine(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "github_pat_secret" }], usage: { input: 1 } } }));
   assert.equal(message.includes("github_pat_secret"), false);
+  const update = sanitizeRpcLogLine(JSON.stringify({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "raw model reasoning" } }));
+  assert.equal(update.includes("raw model reasoning"), false);
+  assert.deepEqual(JSON.parse(update), { type: "message_update", event: "thinking_delta" });
 });

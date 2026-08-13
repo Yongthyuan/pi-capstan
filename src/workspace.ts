@@ -2,7 +2,7 @@ import { appendFile, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } f
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import type { GitMergeOperation, GitRunState, MergeStrategy, Subtask, SwarmRun } from "./types.ts";
-import { ensurePrivateDir, matchesAnyGlob, pathExists, runCommand, sha256 } from "./utils.ts";
+import { ensurePrivateDir, matchesAnyGlob, pathExists, runCommand, sha256, truncateTail } from "./utils.ts";
 
 export interface WorkspaceOptions {
   cwd: string;
@@ -327,12 +327,22 @@ export class WorkspaceManager {
     if (git.dirtyBase || currentHead !== git.initialHead || sha256(currentStatus) !== git.initialStatusHash) {
       return { outcome: "branch", note: `主工作区在运行期间有状态或 HEAD 漂移，已安全降级为分支 ${git.integrationBranch}` };
     }
-    await this.mustGit(git.repoRoot, ["merge", "--squash", git.integrationBranch]);
-    if (strategy === "commit") {
-      await this.mustGit(git.repoRoot, ["-c", "user.name=Pi Swarm", "-c", "user.email=pi-swarm@local.invalid", "commit", "-m", `swarm: ${this.runId}`]);
-      return { outcome: "committed", note: "已生成 squash commit" };
+    try {
+      await this.mustGit(git.repoRoot, ["merge", "--squash", git.integrationBranch]);
+      if (strategy === "commit") {
+        await this.mustGit(git.repoRoot, ["-c", "user.name=Pi Swarm", "-c", "user.email=pi-swarm@local.invalid", "commit", "-m", `swarm: ${this.runId}`]);
+        return { outcome: "committed", note: "已生成 squash commit" };
+      }
+      return { outcome: "applied", note: "结果已暂存，请用 git diff --staged 审阅" };
+    } catch (error) {
+      // The drift checks above make squash conflicts nearly impossible, but an
+      // edit racing between the check and the merge could still leave a
+      // half-applied squash in the user's main worktree. Roll it back; the
+      // results stay safe on the integration branch.
+      await this.gitCommand(git.repoRoot, ["reset", "--merge"]);
+      const message = error instanceof Error ? error.message : String(error);
+      return { outcome: "branch", note: `落地失败，已回滚主工作区并降级为分支 ${git.integrationBranch}: ${truncateTail(message, 300)}` };
     }
-    return { outcome: "applied", note: "结果已暂存，请用 git diff --staged 审阅" };
   }
 
   async cleanupWorktrees(preserveBranches = true, preservePaths: string[] = []): Promise<void> {
@@ -413,7 +423,10 @@ export class WorkspaceManager {
     if (result.exitCode !== 0 || !result.stdout.trim()) return;
     const path = isAbsolute(result.stdout.trim()) ? result.stdout.trim() : join(git.repoRoot, result.stdout.trim());
     await mkdir(dirname(path), { recursive: true });
-    const line = `/${directory.replace(/\/$/, "")}/`;
+    // No trailing slash: a dir-only pattern would not match the symlinks that
+    // prepareTaskDependencies plants in worktrees, leaving them as untracked
+    // entries that block candidate promotion.
+    const line = `/${directory.replace(/\/$/, "")}`;
     const current = await pathExists(path) ? await readFile(path, "utf8") : "";
     if (!current.split("\n").includes(line)) await appendFile(path, `${current.endsWith("\n") || !current ? "" : "\n"}${line}\n`);
   }

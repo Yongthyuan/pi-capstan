@@ -245,6 +245,7 @@ export interface WorkerEventMap {
   action: { label: string };
   tool: { active: boolean; name?: string; reset?: boolean };
   text: { text: string };
+  activity: Record<string, never>;
   usage: { usage: UsageTotals; turns: number };
   settled: Record<string, never>;
   ui: { request: PendingUiRequest & Record<string, unknown> };
@@ -339,6 +340,7 @@ export interface ParsedSwarmCommand {
   bestOf?: number;
   model?: string;
   rest: string[];
+  warnings: string[];
 }
 
 export interface CaseRecord {

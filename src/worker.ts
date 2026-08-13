@@ -260,6 +260,12 @@ export class WorkerHandle {
       this.emitter.emit("ui", { request: event as PendingUiRequest });
       return;
     }
+    if (event.type === "message_update") {
+      // Streaming deltas (including long reasoning phases) prove the model is
+      // alive; without this the stall watchdog kills quietly thinking workers.
+      this.emitter.emit("activity", {});
+      return;
+    }
     if (event.type === "tool_execution_start") {
       this.emitter.emit("tool", { active: true, name: String(event.toolName ?? "") });
       this.emitter.emit("action", { label: formatToolAction(event.toolName, event.args ?? event.input ?? {}) });
@@ -383,6 +389,11 @@ export function sanitizeRpcLogLine(line: string): string {
   try { event = JSON.parse(line) as Record<string, any>; } catch { return JSON.stringify({ type: "invalid_rpc_json", bytes: Buffer.byteLength(line) }); }
   if (event.type === "response") {
     return JSON.stringify({ type: event.type, id: event.id, command: event.command, success: event.success, error: redactValue(event.error) });
+  }
+  if (event.type === "message_update") {
+    // Delta payloads carry raw model text under keys the generic redactor does
+    // not cover, and logging every token would bloat the jsonl file.
+    return JSON.stringify({ type: event.type, event: event.assistantMessageEvent?.type });
   }
   if (event.type === "tool_execution_start") {
     const args = event.args ?? event.input ?? {};

@@ -31,6 +31,7 @@ export class SwarmService {
   }
 
   async handle(parsed: ParsedSwarmCommand, ctx: ExtensionCommandContext): Promise<void> {
+    for (const warning of parsed.warnings) ctx.ui.notify(warning, "warning");
     if (parsed.action === "run") return this.runTask(parsed.task, ctx, parsed);
     if (parsed.action === "board") return this.board(ctx);
     if (parsed.action === "pause") return this.pause(ctx);

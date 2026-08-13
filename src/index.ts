@@ -35,7 +35,7 @@ export default function swarmExtension(pi: ExtensionAPI) {
     description: "Open swarm dashboard",
     handler: async (ctx) => {
       try {
-        await service.handle({ action: "board", task: "", force: false, solo: false, planOnly: false, rest: [] }, ctx as any);
+        await service.handle({ action: "board", task: "", force: false, solo: false, planOnly: false, rest: [], warnings: [] }, ctx as any);
       } catch (error) {
         ctx.ui.notify(String(error), "error");
       }

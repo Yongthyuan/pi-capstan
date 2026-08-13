@@ -147,6 +147,38 @@ test("stall watchdog exempts a long-running active tool", async () => {
   }
 });
 
+test("stall watchdog treats streaming thinking updates as activity", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-thinking-"));
+  try {
+    const fixture = await makeOrchestratorFixture(root, "thinking", 2_500, async () => "stop", { FAKE_PI_THINKING: "1" });
+    // 200ms threshold vs 20ms delta cadence: still fails without the
+    // message_update fix, but tolerates event-loop backlog on loaded CI hosts.
+    fixture.config.worker.stallSec = 0.2;
+    await fixture.orchestrator.execute(false);
+    assert.equal(fixture.run.phase, "done", fixture.run.error);
+    assert.deepEqual(fixture.run.merged, ["a", "b"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("shared dependency setup commands never overlap across worktrees", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-setup-serial-"));
+  try {
+    const fixture = await makeOrchestratorFixture(root, "setup-serial", 20, async () => "stop", {}, undefined, true);
+    await mkdir(join(fixture.repo, "node_modules"), { recursive: true });
+    // Structural safety in verifyCommands rejects ; & | < > so the probe is one comma expression.
+    const lockScript = "(f=require('fs'),p='node_modules/.swarm-setup-lock',f.existsSync(p)?process.exit(1):(f.writeFileSync(p,'x'),setTimeout(function(){f.unlinkSync(p),process.exit(0)},400)))";
+    fixture.config.worker.setupCommands = [`node -e "${lockScript}"`];
+    fixture.config.run.setupAllowedPrefixes = ["node -e"];
+    await fixture.orchestrator.execute(false);
+    assert.equal(fixture.run.phase, "done", fixture.run.error);
+    assert.equal(Object.values(fixture.run.workers).every((worker: any) => worker.setupComplete), true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("detach affects only one worker and a later orchestrator can resume it", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-detach-"));
   try {
@@ -307,10 +339,13 @@ const delayMap = JSON.parse(process.env.FAKE_PI_DELAY_MAP ?? "{}");
 const delay = Number(delayMap[workerId] ?? process.env.FAKE_PI_DELAY_MS ?? 10);
 const activeTool = process.env.FAKE_PI_TOOL_ACTIVE === "1";
 const requestUi = process.env.FAKE_PI_UI === "1";
+const thinking = process.env.FAKE_PI_THINKING === "1";
 let activeTimer;
+let thinkingTimer;
 let waitingUi = false;
 function out(value) { process.stdout.write(JSON.stringify(value) + "\\n"); }
 function finish() {
+  if (thinkingTimer) clearInterval(thinkingTimer), (thinkingTimer = undefined);
   if (activeTool) out({ type: "tool_execution_end", toolName: "bash" });
   out({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Completion Report\\n- done" }], usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: { total: 0.001 } } } });
   out({ type: "agent_settled" });
@@ -321,6 +356,7 @@ rl.on("line", (line) => {
   else if (cmd.type === "prompt") {
     out({ id: cmd.id, type: "response", command: "prompt", success: true });
     if (activeTool) out({ type: "tool_execution_start", toolName: "bash", args: { command: "long-running-test" } });
+    if (thinking) thinkingTimer = setInterval(() => out({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "reasoning" } }), 20);
     if (requestUi) {
       waitingUi = true;
       out({ type: "extension_ui_request", id: "ui-" + workerId, method: "confirm", title: "approve " + workerId, message: "continue?" });
@@ -334,6 +370,7 @@ rl.on("line", (line) => {
     waitingUi = false;
     activeTimer = setTimeout(() => { activeTimer = undefined; finish(); }, delay);
   } else if (cmd.type === "abort") {
+    if (thinkingTimer) clearInterval(thinkingTimer), (thinkingTimer = undefined);
     if (activeTimer) clearTimeout(activeTimer), (activeTimer = undefined);
     out({ type: "agent_settled" });
     out({ id: cmd.id, type: "response", command: "abort", success: true });

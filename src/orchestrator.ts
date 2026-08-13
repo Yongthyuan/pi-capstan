@@ -69,6 +69,7 @@ export class Orchestrator {
   private persistChain: Promise<void> = Promise.resolve();
   private mergeChain: Promise<void> = Promise.resolve();
   private interactionChain: Promise<void> = Promise.resolve();
+  private setupChain: Promise<void> = Promise.resolve();
   private uiBatch: QueuedUiRequest[] = [];
   private uiBatchTimer?: ReturnType<typeof setTimeout>;
   private abortRequested = false;
@@ -409,17 +410,20 @@ export class Orchestrator {
     await this.persist();
     try {
       runtime.currentAction = "preparing worktree dependencies";
-      const linked = await this.workspace.prepareTaskDependencies(workspace.path, this.config.worker.shareDependencyDirs);
-      if (!runtime.setupComplete && this.config.worker.setupCommands.length) {
-        if (!this.hooks.projectTrusted) throw new Error(`${task.id} setupCommands 仅允许在受信任项目中执行`);
-        const setup = await verifyCommands(this.config.worker.setupCommands, workspace.path, this.config.worker.setupTimeoutSec, {
-          allowedPrefixes: this.config.run.setupAllowedPrefixes,
-        });
-        if (!setup.ok) {
-          const failed = setup.commands.find((command) => command.exitCode !== 0);
-          throw new Error(`${task.id} worktree setup 失败: ${failed?.stderr || failed?.stdout || failed?.command || "unknown"}`);
+      const linked = await this.runExclusiveSetup(async () => {
+        const linkedDirs = await this.workspace.prepareTaskDependencies(workspace.path, this.config.worker.shareDependencyDirs);
+        if (!runtime.setupComplete && this.config.worker.setupCommands.length) {
+          if (!this.hooks.projectTrusted) throw new Error(`${task.id} setupCommands 仅允许在受信任项目中执行`);
+          const setup = await verifyCommands(this.config.worker.setupCommands, workspace.path, this.config.worker.setupTimeoutSec, {
+            allowedPrefixes: this.config.run.setupAllowedPrefixes,
+          });
+          if (!setup.ok) {
+            const failed = setup.commands.find((command) => command.exitCode !== 0);
+            throw new Error(`${task.id} worktree setup 失败: ${failed?.stderr || failed?.stdout || failed?.command || "unknown"}`);
+          }
         }
-      }
+        return linkedDirs;
+      });
       runtime.setupComplete = true;
       if (linked.length) runtime.currentAction = `shared dependencies: ${linked.join(", ")}`;
       await this.persist();
@@ -759,20 +763,30 @@ export class Orchestrator {
     }
   }
 
-  private async prepareVerificationEnvironment(target: string, operation?: GitMergeOperation): Promise<void> {
-    await this.workspace.prepareTaskDependencies(target, this.config.worker.shareDependencyDirs);
-    const setupComplete = operation ? operation.setupComplete : this.run.integrationSetupComplete;
-    if (!setupComplete && this.config.worker.setupCommands.length) {
-      if (!this.hooks.projectTrusted) throw new Error("integration setupCommands 仅允许在受信任项目中执行");
-      const setup = await verifyCommands(this.config.worker.setupCommands, target, this.config.worker.setupTimeoutSec, { allowedPrefixes: this.config.run.setupAllowedPrefixes });
-      if (!setup.ok) {
-        const failed = setup.commands.find((command) => command.exitCode !== 0);
-        throw new Error(`integration setup 失败: ${failed?.stderr || failed?.stdout || failed?.command || "unknown"}`);
+  private prepareVerificationEnvironment(target: string, operation?: GitMergeOperation): Promise<void> {
+    return this.runExclusiveSetup(async () => {
+      await this.workspace.prepareTaskDependencies(target, this.config.worker.shareDependencyDirs);
+      const setupComplete = operation ? operation.setupComplete : this.run.integrationSetupComplete;
+      if (!setupComplete && this.config.worker.setupCommands.length) {
+        if (!this.hooks.projectTrusted) throw new Error("integration setupCommands 仅允许在受信任项目中执行");
+        const setup = await verifyCommands(this.config.worker.setupCommands, target, this.config.worker.setupTimeoutSec, { allowedPrefixes: this.config.run.setupAllowedPrefixes });
+        if (!setup.ok) {
+          const failed = setup.commands.find((command) => command.exitCode !== 0);
+          throw new Error(`integration setup 失败: ${failed?.stderr || failed?.stdout || failed?.command || "unknown"}`);
+        }
+        if (operation) operation.setupComplete = true;
+        else this.run.integrationSetupComplete = true;
+        await this.persist();
       }
-      if (operation) operation.setupComplete = true;
-      else this.run.integrationSetupComplete = true;
-      await this.persist();
-    }
+    });
+  }
+
+  private runExclusiveSetup<T>(action: () => Promise<T>): Promise<T> {
+    // Shared dependency dirs are symlinks onto one physical directory, so
+    // concurrent setup commands (npm ci and friends) would trample each other.
+    const result = this.setupChain.then(action, action);
+    this.setupChain = result.then(() => undefined, () => undefined);
+    return result;
   }
 
   private async runIntegrationFixer(commands: string[], failure: VerificationResult): Promise<void> {
@@ -895,6 +909,8 @@ export class Orchestrator {
       this.schedulePersist();
     });
     handle.on("action", ({ label }) => { runtime.currentAction = label; runtime.lastEventAt = Date.now(); runtime.stallCount = 0; if (label.startsWith("⚠")) runtime.scopeViolations.push(label); this.schedulePersist(); });
+    // Streaming deltas arrive per token; refresh liveness in memory only.
+    handle.on("activity", () => { runtime.lastEventAt = Date.now(); runtime.stallCount = 0; });
     handle.on("text", ({ text }) => { runtime.lastText = truncateTail(text, 8_000); runtime.completionReport = extractCompletionReport(text); runtime.lastEventAt = Date.now(); runtime.stallCount = 0; this.schedulePersist(); });
     handle.on("usage", ({ usage, turns }) => {
       runtime.usage = addUsage({ ...usageBase }, usage);

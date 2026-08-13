@@ -62,6 +62,45 @@ test("dirty temporary baseline can execute but never auto-applies", async () => 
   }
 });
 
+test("failed landing rolls the main worktree back and degrades to branch", async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-land-rollback-"));
+  const repo = join(root, "repo");
+  await mkdir(repo, { recursive: true });
+  try {
+    await writeFile(join(repo, "README.md"), "base\n");
+    await git(repo, ["init", "-q"]);
+    await git(repo, ["config", "user.email", "test@example.invalid"]);
+    await git(repo, ["config", "user.name", "Test"]);
+    await git(repo, ["add", "README.md"]);
+    await git(repo, ["commit", "-qm", "initial"]);
+    const workspace = new WorkspaceManager({ cwd: repo, runId: "land-fail", runDir: join(repo, ".pi", "swarm", "runs", "land-fail"), worktreesRoot: join(root, "worktrees") });
+    await workspace.prepare(false);
+    const task: any = { id: "a", title: "a", ownedPaths: ["src/**"] };
+    const child = await workspace.createTaskWorktree(task);
+    await mkdir(join(child.path, "src"));
+    await writeFile(join(child.path, "src", "a.ts"), "ok\n");
+    await workspace.commitTask(task, child.path);
+    const operation = await workspace.beginCandidate("wave", "land-fail-wave");
+    await workspace.mergeTask(task, child.branch, operation);
+    operation.phase = "verified";
+    await workspace.promoteCandidate(operation);
+    const original = (workspace as any).gitCommand.bind(workspace);
+    (workspace as any).gitCommand = (cwd: string, args: string[], env?: NodeJS.ProcessEnv) => {
+      if (args[0] === "merge" && args.includes("--squash")) return Promise.resolve({ exitCode: 1, stdout: "", stderr: "simulated mid-squash failure" });
+      return original(cwd, args, env);
+    };
+    const landing = await workspace.land("apply");
+    assert.equal(landing.outcome, "branch");
+    assert.equal(landing.note.includes("已回滚主工作区"), true);
+    assert.equal(await gitOutput(repo, ["status", "--porcelain"]), "");
+    assert.equal(await existsAt(repo, "src/a.ts"), false);
+    (workspace as any).gitCommand = original;
+    await workspace.cleanupWorktrees(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("worktrees safely share an existing dependency directory", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-dependencies-"));
   const repo = join(root, "repo");

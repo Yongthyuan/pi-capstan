@@ -16,6 +16,14 @@ test("command parser preserves quoted task and flags", () => {
   assert.deepEqual(splitArgs("'a b' c"), ["a b", "c"]);
 });
 
+test("command parser warns when unknown flags fall into task text", () => {
+  const parsed = parseSwarmCommand("fix login bug --budgt 8");
+  assert.equal(parsed.task, "fix login bug --budgt 8");
+  assert.equal(parsed.warnings.length, 1);
+  assert.equal(parsed.warnings[0]!.includes("--budgt"), true);
+  assert.deepEqual(parseSwarmCommand('--budget 2 "quoted task"').warnings, []);
+});
+
 test("rule gate separates a single action from a broad task", async () => {
   assert.ok(ruleGate("改一行 typo", 10).score <= 0);
   const broad = ruleGate("重构所有模块，同时更新代码、测试以及文档，涉及 src/a.ts src/b.ts web/c.ts", 400);

@@ -39,6 +39,7 @@ export function parseSwarmCommand(input: string): ParsedSwarmCommand {
     solo: false,
     planOnly: false,
     rest: [],
+    warnings: [],
   };
   if (tokens[0] && ACTIONS.has(tokens[0])) {
     parsed.action = tokens.shift() as ParsedSwarmCommand["action"];
@@ -57,7 +58,10 @@ export function parseSwarmCommand(input: string): ParsedSwarmCommand {
     else if (token === "--model") {
       parsed.model = tokens[++index];
       if (!parsed.model) throw new Error("--model 缺少值");
-    } else task.push(token);
+    } else {
+      if (/^--?[A-Za-z]/.test(token)) parsed.warnings.push(`未知选项 ${token} 已按任务文本处理`);
+      task.push(token);
+    }
   }
   parsed.task = task.join(" ").trim();
   if (!parsed.task) parsed.action = "help";
