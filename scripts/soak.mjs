@@ -5,12 +5,15 @@ import { readdirSync } from "node:fs";
 // hides. Usage: node scripts/soak.mjs [iterations] [test-name-pattern]
 const iterations = Math.max(1, Math.trunc(Number(process.argv[2]) || 20));
 const pattern = process.argv[3];
+// SOAK_TEST_ARGS mirrors the extra runner flags CI needs (e.g. Node 22
+// isolation flags on Windows) without changing local default behavior.
+const extraArgs = (process.env.SOAK_TEST_ARGS ?? "").split(/\s+/).filter(Boolean);
 const files = readdirSync("test").filter((file) => file.endsWith(".test.ts")).map((file) => `test/${file}`);
 const failures = [];
 
 for (let run = 1; run <= iterations; run++) {
   const started = Date.now();
-  const args = ["--test", ...(pattern ? ["--test-name-pattern", pattern] : []), ...files];
+  const args = ["--test", ...extraArgs, ...(pattern ? ["--test-name-pattern", pattern] : []), ...files];
   const result = spawnSync(process.execPath, args, { encoding: "utf8" });
   const ok = result.status === 0;
   console.log(`run ${run}/${iterations}: ${ok ? "pass" : "FAIL"} (${((Date.now() - started) / 1000).toFixed(1)}s)`);
