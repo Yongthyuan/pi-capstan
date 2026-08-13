@@ -1,49 +1,53 @@
 # Pi Agent Swarm
 
-Pi Agent Swarm 是一个面向 `@earendil-works/pi-coding-agent` 0.84.x 的原生多智能体扩展。它通过 `/swarm <task>` 完成复杂度门控、证据化拆解、计划确认、Git worktree 并行执行、验证、合并、恢复和报告回注。当前版本为 `0.5.0`，定位是可受控自用的 beta，而不是不可信代码的安全沙箱。已验证版本是 Pi 0.84.1；运行时还会检查必需 API 能力，支持范围为 `>=0.84.1 <0.85.0`。
+[中文文档](./README.zh-CN.md)
 
-## 当前实现
+Pi Agent Swarm is a native multi-agent extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). A single `/swarm <task>` command takes a complex task through complexity gating, evidence-based decomposition, plan confirmation, parallel execution in Git worktrees, verification, merging, recovery, and report injection.
 
-- 两层复杂度门控与 `--force` / `--solo` / `--plan-only`
-- 读取 tracked/untracked 文件、manifest、符号/测试结构、import 邻域和 test/source 邻域的混合 planner scout
-- 严格 SwarmPlan 校验：DAG、拓扑 mergeOrder、契约和路径所有权
-- 原生 `pi --mode rpc` worker、JSONL、usage、steer/abort、批量 UI 审批转发
-- worker 扩展隔离：`--no-extensions`，显式 safety guard + scope guard
-- 仓库级跨进程 lease、PID 启动身份校验、心跳式孤儿 worker 回收和幂等 `/swarm resume`
-- Git worktree、共享依赖目录与可信 setup、临时 dirty baseline、last-green candidate 合并、冲突仲裁和集成 fixer
-- slot 流水调度、依赖感知的部分成功；失败任务不会吞掉无依赖的绿色结果
-- scope 越界默认精确回滚，lockfile/shared/generated path 有显式通道
-- worker mailbox、lead 协调请求、运行中 `/swarm replan` 和作用域内 `swarm_fs`
-- 可选 `--best-of N` 同题候选竞争，只读 reviewer 选择后再进入 candidate 验证轨道
-- worker/集成两级验证；验证命令使用 `shell:false`、语法门和前缀 allowlist
-- pause、持久化预算、单 worker detach、kill 使用统一控制屏障；活动工具不计入 stall，真正静默时先 steer 一次再失败
-- dashboard、widget、报告 renderer、运行 entry、案例库和日志回放
-- 默认 `branch` 落地；仅干净且未漂移的主工作区允许 `apply`
+Current version: `0.6.0`. Positioning: a controlled beta for your own trusted repositories, not a security sandbox for untrusted code. Tested against Pi 0.84.1; required API capabilities are probed at load time. Pi `>=0.84.1` is accepted: 0.84.x loads as compatible, and newer releases load with an explicit warning instead of refusing to start.
 
-## 安装
+## What it does
 
-开发时直接加载：
+- Two-tier complexity gating with `--force` / `--solo` / `--plan-only`
+- Hybrid planner scout that reads tracked/untracked files, manifests, symbol/test structure, import neighborhoods, and test/source adjacency
+- Strict SwarmPlan validation: DAG, topological mergeOrder, contracts, and path ownership
+- Native `pi --mode rpc` workers with JSONL transport, usage accounting, steer/abort, and batched UI approval forwarding
+- Worker extension isolation: `--no-extensions` plus explicit safety and scope guards
+- Repo-level cross-process lease, PID launch-identity check, heartbeat-based orphan worker reclaim, and idempotent `/swarm resume`
+- Git worktrees, shared dependency directories with trusted setup, temporary dirty baselines, last-green candidate merging, conflict arbitration, and an integration fixer
+- Slot pipeline scheduling with dependency-aware partial success; a failed task does not swallow independent green results
+- Precise rollback on scope violations by default; explicit channels for lockfile/shared/generated paths
+- Worker mailbox, lead coordination requests, mid-run `/swarm replan`, and scoped `swarm_fs`
+- Optional `--best-of N` same-task candidate competition; a read-only reviewer picks before the candidate enters the verification track
+- Two-level verification (worker and integration); verification commands run with `shell:false`, a syntax gate, and a prefix allowlist
+- Unified control barrier for pause, persistent budgets, single-worker detach, and kill; active tools do not count toward stall, and true silence gets one steer before failing
+- Dashboard, widget, report renderer, run entries, case store, and log replay
+- Default `branch` landing; `apply` is only allowed on a clean, non-drifted main worktree
+
+## Install
+
+Load directly during development:
 
 ```bash
 npm ci
 pi --no-extensions -e /absolute/path/to/pi-swarm/index.ts
 ```
 
-用户级自动发现：
+User-level auto-discovery:
 
 ```bash
 ln -s /absolute/path/to/pi-swarm ~/.pi/agent/extensions/swarm
 ```
 
-然后在 Pi 中执行 `/reload`，或重新启动 Pi。也可以复制整个目录，扩展根入口是 `index.ts`。
+Then run `/reload` inside Pi, or restart Pi. Copying the whole directory also works; the extension entry point is `index.ts`.
 
-## 使用
+## Usage
 
 ```text
-/swarm "实现 OAuth 服务端、前端登录页、测试和文档"
-/swarm "任务" --force --max 4 --budget 8 --model provider/model
-/swarm "高风险任务" --force --best-of 2
-/swarm "任务" --plan-only
+/swarm "implement the OAuth backend, the login page, tests, and docs"
+/swarm "task" --force --max 4 --budget 8 --model provider/model
+/swarm "high-risk task" --force --best-of 2
+/swarm "task" --plan-only
 /swarm board
 /swarm pause | resume [runId] | abort
 /swarm replan
@@ -53,46 +57,48 @@ ln -s /absolute/path/to/pi-swarm ~/.pi/agent/extensions/swarm
 /swarm config | status
 ```
 
-Pi 主模型也可以调用 `swarm_delegate` 工具，但不会绕过人工计划确认。
+The main Pi model can also call the `swarm_delegate` tool, but it cannot bypass human plan confirmation.
 
-`/swarm pr [runId]` 会再次确认，然后只推送 last-green integration branch 并通过 GitHub CLI 创建 PR；本地 RPC 日志、session 和 report 正文不会被放进 PR。远端 CI 仍由目标仓库自己的规则决定。
+`/swarm pr [runId]` asks for confirmation again, then pushes only the last-green integration branch and creates a PR through the GitHub CLI; local RPC logs, sessions, and report bodies never end up in the PR. Remote CI is still governed by the target repository's own rules.
 
-## 配置
+## Configuration
 
-合并顺序：内置默认值 → `~/.pi/agent/swarm.json` → `<repo>/.pi/swarm.json` → 命令行 flags。
+Merge order: built-in defaults → `~/.pi/agent/swarm.json` → `<repo>/.pi/swarm.json` → command-line flags.
 
-安全默认值：
+Safety defaults:
 
 - `mergeStrategy: "branch"`
-- `caseStore.enabled: true`，仅写入用户本机 agent 目录，并对常见凭据做脱敏
+- `caseStore.enabled: true`; writes only to the user's local agent directory and redacts common credentials
 - `failurePolicy: "continue-independent"`
-- `worker.shareDependencyDirs: ["node_modules"]`；POSIX 使用 symlink，Windows 使用 junction
-- `worker.setupCommands: []`；仅受信任项目可执行，且受独立 allowlist 与超时约束
-- `worker.scopeViolationPolicy: "revert"`；越界路径不会消耗整个任务成果
-- 默认预算为 planner `$1/160K tokens`、worker `$2/250K`、run `$8/1M`
-- worker 仅加载明确列出的工具和守卫扩展
-- planner 只能选择 `run.verifyAllowedPrefixes` 中的验证命令；管道、重定向、命令替换和多行命令会被拒绝
-- planner 和 worker 都有调用超时、token 与美元预算；planner 使用量计入 run 总量
-- 预算越界先中断当前模型回合，再由用户选择扩容或停止整个 run
-- `--best-of N` 会线性增加模型成本，默认仍为 `1`
-- dirty baseline 的结果永不自动 apply
-- RPC 日志默认去除 prompt、命令正文和常见凭据；logs/session 默认分别保留 14/30 天
-- state 使用原子写入和 `state.prev.json` 回退；损坏状态会在 session 启动时显式告警
+- `worker.shareDependencyDirs: ["node_modules"]`; symlinks on POSIX, junctions on Windows
+- `worker.setupCommands: []`; runs only in trusted projects, constrained by a separate allowlist and timeout
+- `worker.scopeViolationPolicy: "revert"`; out-of-scope paths do not consume the whole task result
+- `worker.strictBash: false`; opting in appends denylist patterns that block inline interpreter code (`python -c`, `node -e`, shell `-c`, `find -exec/-delete`) at the cost of also blocking some legitimate one-liners
+- Default budgets: planner `$1/160K tokens`, worker `$2/250K`, run `$8/1M`
+- Workers load only the explicitly listed tool and guard extensions
+- The planner can only pick verification commands from `run.verifyAllowedPrefixes`; pipes, redirects, command substitution, and multi-line commands are rejected
+- Planner and workers all have call timeouts plus token and dollar budgets; planner usage counts toward the run total
+- A budget overrun first interrupts the current model turn, then lets the user choose between raising the budget and stopping the run
+- `--best-of N` increases model cost linearly; the default stays `1`
+- Results from a dirty baseline are never auto-applied
+- RPC logs strip prompts, command bodies, and common credentials by default; logs/sessions are retained for 14/30 days respectively
+- State uses atomic writes with a `state.prev.json` fallback; corrupted state raises an explicit warning at session start
 
-可在 Pi 中运行 `/swarm config` 写项目配置。
+Run `/swarm config` inside Pi to write a project config.
 
-## 测试
+## Testing
 
 ```bash
 npm install
 npm run check
 npm test
 npm run test:native
+npm run test:soak [iterations] [name-pattern]
 ```
 
-`test:native` 使用临时 `PI_CODING_AGENT_DIR`，模拟 `~/.pi/agent/extensions/swarm/` 自动发现，并通过 Pi RPC 验证 `/swarm` 注册、guard、mailbox/安全文件工具的加载和命令处理；不会修改真实的 `~/.pi`。CI 同时运行 Linux 与 Windows 矩阵。
+`test:native` uses a temporary `PI_CODING_AGENT_DIR` to simulate `~/.pi/agent/extensions/swarm/` auto-discovery and verifies `/swarm` registration, the guard, mailbox/safe file tool loading, and command handling over the Pi RPC protocol; it never touches the real `~/.pi`. `test:soak` repeats the suite to surface timing flakes that a single green run hides. CI runs a Linux and Windows matrix on every push and a daily cross-platform soak.
 
-使用已经认证的真实模型运行可选 canary：
+Optional canaries against a real, already-authenticated model:
 
 ```bash
 PI_SWARM_TEST_MODEL=provider/model npm run test:native:plan
@@ -100,8 +106,12 @@ PI_SWARM_TEST_MODEL=provider/model npm run test:native:model
 PI_SWARM_TEST_MODEL=provider/model npm run test:native:e2e
 ```
 
-前两个命令分别验证真实 planner 和真实 worker；`test:native:e2e` 从原生 `/swarm` 命令贯通计划确认、两个真实 worker、候选验证、推进 integration 和报告状态。测试都会清理临时仓库，但 Pi 可能更新自身的短时认证锁文件。
+The first two verify the real planner and a real worker; `test:native:e2e` drives the native `/swarm` command through plan confirmation, two real workers, candidate verification, integration advancement, and report status. The tests clean up their temporary repositories, but Pi may refresh its own short-lived auth lock files.
 
-## 安全边界
+## Safety boundary
 
-Git worktree 是并发隔离，不是操作系统安全沙箱。scope guard、bash denylist、扩展隔离、安全验证执行器和合并前 diff 检查用于防误操作，但项目测试脚本本身仍会执行代码。对恶意仓库、脚本或提示词必须使用独立容器或 OS 沙箱，并隔离网络和凭据。
+Git worktrees provide concurrency isolation, not an OS security sandbox. The scope guard, bash denylist, extension isolation, safe verification executor, and pre-merge diff checks are there to prevent accidents, but your project's own test scripts still execute code. For malicious repositories, scripts, or prompts you must use a separate container or OS sandbox with isolated network and credentials.
+
+## License
+
+[MIT](./LICENSE)
