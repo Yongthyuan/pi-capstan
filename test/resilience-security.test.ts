@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, realpath, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_CONFIG, validateConfig } from "../src/config.ts";
@@ -28,10 +28,11 @@ test("verification timeout escalates from TERM to KILL", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-verify-timeout-"));
   try {
     const script = join(root, "hang.mjs");
-    await writeFile(script, "#!/usr/bin/env node\nprocess.on('SIGTERM', () => {});\nsetInterval(() => {}, 1000);\n");
-    await chmod(script, 0o700);
+    // Invoked via `node` rather than shebang exec: fresh executable scripts
+    // can stall for seconds in loaded environments, making this test flaky.
+    await writeFile(script, "process.on('SIGTERM', () => {});\nsetInterval(() => {}, 1000);\n");
     const started = Date.now();
-    const result = await verifyCommands(["./hang.mjs"], root, 1, { allowedPrefixes: ["./hang.mjs"] });
+    const result = await verifyCommands(["node hang.mjs"], root, 1, { allowedPrefixes: ["node hang.mjs"] });
     assert.equal(result.ok, false);
     assert.equal(result.commands[0]?.timedOut, true);
     assert.equal(Date.now() - started >= 3_000, true);
@@ -47,9 +48,8 @@ test("verification subprocesses do not inherit credential-like environment varia
   try {
     process.env.SWARM_TEST_API_KEY = "must-not-leak";
     const script = join(root, "env-check.mjs");
-    await writeFile(script, "#!/usr/bin/env node\nprocess.exit(process.env.SWARM_TEST_API_KEY ? 9 : 0);\n");
-    await chmod(script, 0o700);
-    const result = await verifyCommands(["./env-check.mjs"], root, 5, { allowedPrefixes: ["./env-check.mjs"] });
+    await writeFile(script, "process.exit(process.env.SWARM_TEST_API_KEY ? 9 : 0);\n");
+    const result = await verifyCommands(["node env-check.mjs"], root, 5, { allowedPrefixes: ["node env-check.mjs"] });
     assert.equal(result.ok, true);
   } finally {
     if (prior === undefined) delete process.env.SWARM_TEST_API_KEY;

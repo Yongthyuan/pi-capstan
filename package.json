@@ -7,6 +7,7 @@
   "scripts": {
     "test": "node --test test/*.test.ts",
     "test:ci": "node --test --experimental-test-isolation=none --test-force-exit test/*.test.ts",
+    "test:soak": "node scripts/soak.mjs",
     "check": "tsc --noEmit && node scripts/check-syntax.mjs",
     "test:native": "node scripts/native-smoke.mjs",
     "test:native:model": "node scripts/native-model-smoke.mjs",
