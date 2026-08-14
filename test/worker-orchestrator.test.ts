@@ -184,10 +184,12 @@ test("detach affects only one worker and a later orchestrator can resume it", as
   try {
     const first = await makeOrchestratorFixture(root, "detach", 500);
     const execution = first.orchestrator.execute(false);
-    await waitFor(() => first.run.workers.a?.status === "working");
+    // Detach is defined for an active worker. Wait until the peer is active as
+    // well so a slow process spawn cannot turn this into a scheduler race.
+    await waitFor(() => ["a", "b"].every((id) => first.run.workers[id]?.status === "working"), 10_000);
     const takeover = await first.orchestrator.detachWorker("a");
     await execution;
-    assert.equal(first.run.phase, "done");
+    assert.equal(first.run.phase, "done", first.run.error);
     assert.equal(first.run.workers.a.status, "detached");
     assert.deepEqual(first.run.merged, ["b"]);
     assert.equal(first.run.partialSuccess, true);
@@ -282,12 +284,12 @@ test("simultaneous worker approvals are routed as one batch", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-ui-batch-"));
   try {
     let batches = 0;
-    const fixture = await makeOrchestratorFixture(root, "ui-batch", 20, async () => "stop", { FAKE_PI_UI: "1" }, async (requests) => {
+    const fixture = await makeOrchestratorFixture(root, "ui-batch", 20, async () => "stop", { FAKE_PI_UI: "1", FAKE_PI_UI_BARRIER_COUNT: "2" }, async (requests) => {
       batches++;
       assert.equal(requests.length, 2);
       return Object.fromEntries(requests.map(({ request }) => [request.id, { id: request.id, confirmed: true }]));
     });
-    fixture.config.ui.approvalBatchMs = 50;
+    fixture.config.ui.approvalBatchMs = 250;
     await fixture.orchestrator.execute(false);
     assert.equal(fixture.run.phase, "done", fixture.run.error);
     assert.equal(batches, 1);
@@ -332,20 +334,29 @@ test("trusted setup runs before worker and integration verification without spen
 async function writeFakePi(root: string): Promise<string> {
   const path = join(root, "fake-pi.mjs");
   await writeFile(path, `import readline from "node:readline";
+import { readdirSync, writeFileSync } from "node:fs";
+import { basename } from "node:path";
 const root = ${JSON.stringify(root)};
 const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
-const workerId = process.argv.join(" ").match(/swarm\\/([A-Za-z0-9_-]+)/)?.[1] ?? "unknown";
+const nameIndex = process.argv.indexOf("--name");
+const sessionDirIndex = process.argv.indexOf("--session-dir");
+const workerName = nameIndex >= 0 ? process.argv[nameIndex + 1] : undefined;
+const sessionDir = sessionDirIndex >= 0 ? process.argv[sessionDirIndex + 1] : undefined;
+const workerId = workerName?.match(/^swarm\\/([A-Za-z0-9_-]+)/)?.[1] ?? (sessionDir ? basename(sessionDir) : "unknown");
 const delayMap = JSON.parse(process.env.FAKE_PI_DELAY_MAP ?? "{}");
 const delay = Number(delayMap[workerId] ?? process.env.FAKE_PI_DELAY_MS ?? 10);
 const activeTool = process.env.FAKE_PI_TOOL_ACTIVE === "1";
 const requestUi = process.env.FAKE_PI_UI === "1";
+const uiBarrierCount = Number(process.env.FAKE_PI_UI_BARRIER_COUNT ?? 0);
 const thinking = process.env.FAKE_PI_THINKING === "1";
 let activeTimer;
 let thinkingTimer;
+let uiBarrierTimer;
 let waitingUi = false;
 function out(value) { process.stdout.write(JSON.stringify(value) + "\\n"); }
 function finish() {
   if (thinkingTimer) clearInterval(thinkingTimer), (thinkingTimer = undefined);
+  if (uiBarrierTimer) clearInterval(uiBarrierTimer), (uiBarrierTimer = undefined);
   if (activeTool) out({ type: "tool_execution_end", toolName: "bash" });
   out({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Completion Report\\n- done" }], usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: { total: 0.001 } } } });
   out({ type: "agent_settled" });
@@ -359,7 +370,17 @@ rl.on("line", (line) => {
     if (thinking) thinkingTimer = setInterval(() => out({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "reasoning" } }), 20);
     if (requestUi) {
       waitingUi = true;
-      out({ type: "extension_ui_request", id: "ui-" + workerId, method: "confirm", title: "approve " + workerId, message: "continue?" });
+      const emitUi = () => out({ type: "extension_ui_request", id: "ui-" + workerId, method: "confirm", title: "approve " + workerId, message: "continue?" });
+      if (uiBarrierCount > 0) {
+        writeFileSync(root + "/ui-ready-" + workerId, "ready");
+        const releaseUi = () => {
+          if (readdirSync(root).filter((name) => name.startsWith("ui-ready-")).length < uiBarrierCount) return;
+          if (uiBarrierTimer) clearInterval(uiBarrierTimer), (uiBarrierTimer = undefined);
+          emitUi();
+        };
+        uiBarrierTimer = setInterval(releaseUi, 10);
+        releaseUi();
+      } else emitUi();
       return;
     }
     activeTimer = setTimeout(() => {
@@ -371,6 +392,7 @@ rl.on("line", (line) => {
     activeTimer = setTimeout(() => { activeTimer = undefined; finish(); }, delay);
   } else if (cmd.type === "abort") {
     if (thinkingTimer) clearInterval(thinkingTimer), (thinkingTimer = undefined);
+    if (uiBarrierTimer) clearInterval(uiBarrierTimer), (uiBarrierTimer = undefined);
     if (activeTimer) clearTimeout(activeTimer), (activeTimer = undefined);
     out({ type: "agent_settled" });
     out({ id: cmd.id, type: "response", command: "abort", success: true });
