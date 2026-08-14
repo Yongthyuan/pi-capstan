@@ -253,11 +253,11 @@ test("independent workers continue after one failure and dependent work is block
 test("slot scheduler starts queued work as soon as one slot frees", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-slots-"));
   try {
-    const fixture = await makeOrchestratorFixture(root, "slots", 20, async () => "stop", { FAKE_PI_DELAY_MAP: JSON.stringify({ a: 600, b: 20, c: 20 }) });
+    const fixture = await makeOrchestratorFixture(root, "slots", 20, async () => "stop", { FAKE_PI_WAIT_FOR_WORKER_MAP: JSON.stringify({ a: "c" }) });
     fixture.run.plan.subtasks.push({ id: "c", title: "c", goal: "c", role: "c", rolePrompt: "c", ownedPaths: ["src/c/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: [PASS_COMMAND], criteria: [] } });
     fixture.run.plan.mergeOrder = ["a", "b", "c"];
     const execution = fixture.orchestrator.execute(false);
-    await waitFor(() => Boolean(fixture.run.workers.c?.startedAt));
+    await waitFor(() => Boolean(fixture.run.workers.c?.startedAt), 20_000);
     assert.notEqual(fixture.run.workers.a.status, "done");
     assert.equal(fixture.run.workers.a.endedAt, undefined);
     await execution;
@@ -341,7 +341,7 @@ test("trusted setup runs before worker and integration verification without spen
 async function writeFakePi(root: string): Promise<string> {
   const path = join(root, "fake-pi.mjs");
   await writeFile(path, `import readline from "node:readline";
-import { readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
 const root = ${JSON.stringify(root)};
 const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
@@ -352,6 +352,8 @@ const sessionDir = sessionDirIndex >= 0 ? process.argv[sessionDirIndex + 1] : un
 const workerId = workerName?.match(/^swarm\\/([A-Za-z0-9_-]+)/)?.[1] ?? (sessionDir ? basename(sessionDir) : "unknown");
 const delayMap = JSON.parse(process.env.FAKE_PI_DELAY_MAP ?? "{}");
 const delay = Number(delayMap[workerId] ?? process.env.FAKE_PI_DELAY_MS ?? 10);
+const waitForWorkerMap = JSON.parse(process.env.FAKE_PI_WAIT_FOR_WORKER_MAP ?? "{}");
+const waitForWorker = waitForWorkerMap[workerId];
 const activeTool = process.env.FAKE_PI_TOOL_ACTIVE === "1";
 const requestUi = process.env.FAKE_PI_UI === "1";
 const uiBarrierCount = Number(process.env.FAKE_PI_UI_BARRIER_COUNT ?? 0);
@@ -359,11 +361,29 @@ const thinking = process.env.FAKE_PI_THINKING === "1";
 let activeTimer;
 let thinkingTimer;
 let uiBarrierTimer;
+let workerBarrierTimer;
 let waitingUi = false;
 function out(value) { process.stdout.write(JSON.stringify(value) + "\\n"); }
+function scheduleFinish() {
+  const startTimer = () => {
+    activeTimer = setTimeout(() => {
+      activeTimer = undefined;
+      finish();
+    }, delay);
+  };
+  if (!waitForWorker) return startTimer();
+  const release = () => {
+    if (!existsSync(root + "/worker-started-" + waitForWorker)) return;
+    if (workerBarrierTimer) clearInterval(workerBarrierTimer), (workerBarrierTimer = undefined);
+    startTimer();
+  };
+  workerBarrierTimer = setInterval(release, 10);
+  release();
+}
 function finish() {
   if (thinkingTimer) clearInterval(thinkingTimer), (thinkingTimer = undefined);
   if (uiBarrierTimer) clearInterval(uiBarrierTimer), (uiBarrierTimer = undefined);
+  if (workerBarrierTimer) clearInterval(workerBarrierTimer), (workerBarrierTimer = undefined);
   if (activeTool) out({ type: "tool_execution_end", toolName: "bash" });
   out({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "## Completion Report\\n- done" }], usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: { total: 0.001 } } } });
   out({ type: "agent_settled" });
@@ -373,6 +393,7 @@ rl.on("line", (line) => {
   if (cmd.type === "get_state") out({ id: cmd.id, type: "response", command: "get_state", success: true, data: { sessionFile: root + "/fake-session.jsonl", sessionId: "fake" } });
   else if (cmd.type === "prompt") {
     out({ id: cmd.id, type: "response", command: "prompt", success: true });
+    writeFileSync(root + "/worker-started-" + workerId, "started");
     if (activeTool) out({ type: "tool_execution_start", toolName: "bash", args: { command: "long-running-test" } });
     if (thinking) thinkingTimer = setInterval(() => out({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "reasoning" } }), 100);
     if (requestUi) {
@@ -390,16 +411,14 @@ rl.on("line", (line) => {
       } else emitUi();
       return;
     }
-    activeTimer = setTimeout(() => {
-      activeTimer = undefined;
-      finish();
-    }, delay);
+    scheduleFinish();
   } else if (cmd.type === "extension_ui_response" && waitingUi) {
     waitingUi = false;
-    activeTimer = setTimeout(() => { activeTimer = undefined; finish(); }, delay);
+    scheduleFinish();
   } else if (cmd.type === "abort") {
     if (thinkingTimer) clearInterval(thinkingTimer), (thinkingTimer = undefined);
     if (uiBarrierTimer) clearInterval(uiBarrierTimer), (uiBarrierTimer = undefined);
+    if (workerBarrierTimer) clearInterval(workerBarrierTimer), (workerBarrierTimer = undefined);
     if (activeTimer) clearTimeout(activeTimer), (activeTimer = undefined);
     out({ type: "agent_settled" });
     out({ id: cmd.id, type: "response", command: "abort", success: true });
