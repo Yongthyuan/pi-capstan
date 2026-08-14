@@ -17,6 +17,7 @@ export class WorkspaceManager {
   readonly runDir: string;
   readonly worktreesRoot: string;
   git?: GitRunState;
+  private worktreeMutationChain: Promise<void> = Promise.resolve();
 
   constructor(options: WorkspaceOptions) {
     this.cwd = options.cwd;
@@ -75,19 +76,21 @@ export class WorkspaceManager {
   }
 
   async createTaskWorktree(task: Subtask): Promise<{ path: string; branch: string }> {
-    const git = this.requireGit();
-    const path = join(dirname(git.integrationWorktree), task.id);
-    const branch = `swarm/${this.runId}/${task.id}`;
-    if (await this.isWorktree(path)) return { path, branch };
-    if (await pathExists(path)) throw new Error(`worker 路径存在但不是有效 worktree: ${path}`);
-    await this.gitCommand(git.repoRoot, ["worktree", "prune"]);
-    if (await this.branchExists(branch)) {
-      await this.mustGit(git.repoRoot, ["worktree", "add", path, branch]);
+    return this.runExclusiveWorktreeMutation(async () => {
+      const git = this.requireGit();
+      const path = join(dirname(git.integrationWorktree), task.id);
+      const branch = `swarm/${this.runId}/${task.id}`;
+      if (await this.isWorktree(path)) return { path, branch };
+      if (await pathExists(path)) throw new Error(`worker 路径存在但不是有效 worktree: ${path}`);
+      await this.gitCommand(git.repoRoot, ["worktree", "prune"]);
+      if (await this.branchExists(branch)) {
+        await this.mustGit(git.repoRoot, ["worktree", "add", path, branch]);
+        return { path, branch };
+      }
+      const from = (await this.mustGit(git.integrationWorktree, ["rev-parse", "HEAD"])).trim();
+      await this.mustGit(git.repoRoot, ["worktree", "add", "-b", branch, path, from]);
       return { path, branch };
-    }
-    const from = (await this.mustGit(git.integrationWorktree, ["rev-parse", "HEAD"])).trim();
-    await this.mustGit(git.repoRoot, ["worktree", "add", "-b", branch, path, from]);
-    return { path, branch };
+    });
   }
 
   async prepareTaskDependencies(worktree: string, directories: string[]): Promise<string[]> {
@@ -363,11 +366,13 @@ export class WorkspaceManager {
   }
 
   async discardTaskWorktree(path: string, branch: string): Promise<void> {
-    const git = this.requireGit();
-    if (!branch.startsWith(`swarm/${this.runId}/`)) throw new Error(`refusing to discard non-swarm branch ${branch}`);
-    if (await this.isWorktree(path)) await this.gitCommand(git.repoRoot, ["worktree", "remove", "--force", path]);
-    if (await this.branchExists(branch)) await this.gitCommand(git.repoRoot, ["branch", "-D", branch]);
-    await this.gitCommand(git.repoRoot, ["worktree", "prune"]);
+    await this.runExclusiveWorktreeMutation(async () => {
+      const git = this.requireGit();
+      if (!branch.startsWith(`swarm/${this.runId}/`)) throw new Error(`refusing to discard non-swarm branch ${branch}`);
+      if (await this.isWorktree(path)) await this.gitCommand(git.repoRoot, ["worktree", "remove", "--force", path]);
+      if (await this.branchExists(branch)) await this.gitCommand(git.repoRoot, ["branch", "-D", branch]);
+      await this.gitCommand(git.repoRoot, ["worktree", "prune"]);
+    });
   }
 
   async reconcileMerged(run: SwarmRun): Promise<void> {
@@ -456,6 +461,15 @@ export class WorkspaceManager {
 
   private gitCommand(cwd: string, args: string[], env?: NodeJS.ProcessEnv) {
     return runCommand("git", args, { cwd, env, timeoutMs: 120_000 });
+  }
+
+  private runExclusiveWorktreeMutation<T>(action: () => Promise<T>): Promise<T> {
+    // `git worktree add/remove/prune` all mutate shared files below
+    // .git/worktrees. Concurrent commands can observe half-written metadata,
+    // especially on Windows, so serialize these task-level mutations.
+    const result = this.worktreeMutationChain.then(action, action);
+    this.worktreeMutationChain = result.then(() => undefined, () => undefined);
+    return result;
   }
 }
 

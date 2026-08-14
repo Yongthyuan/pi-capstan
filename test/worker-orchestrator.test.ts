@@ -13,6 +13,12 @@ import { emptyUsage, runCommand } from "../src/utils.ts";
 const PASS_COMMAND = 'node -e "process.exit(0)"';
 const FAIL_COMMAND = 'node -e "process.exit(1)"';
 
+async function cleanupTempRoot(root: string): Promise<void> {
+  // Windows may keep Git/process directory handles alive briefly after their
+  // owners exit. fs.rm retries only transient EBUSY/EPERM/ENOTEMPTY failures.
+  await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+}
+
 test("worker handle speaks strict JSONL RPC", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-worker-"));
   try {
@@ -31,9 +37,7 @@ test("worker handle speaks strict JSONL RPC", async () => {
     await worker.stop(50);
     assert.equal(worker.running, false);
   } finally {
-    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch((error: NodeJS.ErrnoException) => {
-      if (process.platform !== "win32" || error.code !== "EBUSY") throw error;
-    });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -77,7 +81,7 @@ test("orchestrator completes two-worker branch-only vertical slice", async () =>
     assert.deepEqual(run.merged, ["a", "b"]);
     assert.equal(report.includes("Swarm 完成"), true);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -98,7 +102,7 @@ test("pause is a real barrier and resumes interrupted worker turns", async () =>
     assert.equal(fixture.run.phase, "done", fixture.run.error);
     assert.deepEqual(fixture.run.merged, ["a", "b"]);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -119,7 +123,7 @@ test("budget gate aborts the turn, asks once, and continues only after extension
     assert.equal(fixture.run.effectiveBudget.runBudgetUsd > 0.0001, true);
     assert.equal((await fixture.store.load("budget")).effectiveBudget!.runBudgetUsd > 0.0001, true);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -132,7 +136,7 @@ test("stall watchdog steers once then fails a persistently silent worker", async
     assert.equal(fixture.run.phase, "failed");
     assert.equal(Object.values(fixture.run.workers).some((worker: any) => worker.currentAction.includes("stalled twice")), true);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -145,7 +149,7 @@ test("stall watchdog exempts a long-running active tool", async () => {
     assert.equal(fixture.run.phase, "done", fixture.run.error);
     assert.equal(Object.values(fixture.run.workers).every((worker: any) => worker.activeTools === 0), true);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -161,7 +165,7 @@ test("stall watchdog treats streaming thinking updates as activity", async () =>
     assert.equal(fixture.run.phase, "done", fixture.run.error);
     assert.deepEqual(fixture.run.merged, ["a", "b"]);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -178,7 +182,7 @@ test("shared dependency setup commands never overlap across worktrees", async ()
     assert.equal(fixture.run.phase, "done", fixture.run.error);
     assert.equal(Object.values(fixture.run.workers).every((worker: any) => worker.setupComplete), true);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -221,7 +225,7 @@ test("detach affects only one worker and a later orchestrator can resume it", as
     assert.equal(first.run.workers.a.usage.input > 100, true);
     assert.equal(first.run.workers.a.turns > 5, true);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -242,7 +246,7 @@ test("independent workers continue after one failure and dependent work is block
     assert.deepEqual(fixture.run.workers.c.blockedBy, ["a"]);
     assert.equal(fixture.run.partialSuccess, true);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -259,7 +263,7 @@ test("slot scheduler starts queued work as soon as one slot frees", async () => 
     await execution;
     assert.deepEqual(fixture.run.merged, ["a", "b", "c"]);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -279,7 +283,7 @@ test("runtime replan can add pending work without mutating started tasks", async
     assert.equal(fixture.run.planRevision, 2);
     assert.deepEqual(fixture.run.merged, ["a", "b", "c"]);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -297,7 +301,7 @@ test("simultaneous worker approvals are routed as one batch", async () => {
     assert.equal(fixture.run.phase, "done", fixture.run.error);
     assert.equal(batches, 1);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -314,7 +318,7 @@ test("best-of-N runs isolated candidates and records the selected winner", async
     assert.match(fixture.run.workers.a.competition.winner, /^a-try-/);
     assert.equal(Object.keys(fixture.run.workers).some((id) => /-try-/.test(id)), false);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
@@ -330,7 +334,7 @@ test("trusted setup runs before worker and integration verification without spen
     assert.equal(fixture.run.gitOperations.every((operation: any) => operation.setupComplete), true);
     assert.equal(fixture.run.integrationSetupComplete, true);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await cleanupTempRoot(root);
   }
 });
 
