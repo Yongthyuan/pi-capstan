@@ -86,7 +86,9 @@ test("pause is a real barrier and resumes interrupted worker turns", async () =>
   try {
     const fixture = await makeOrchestratorFixture(root, "pause", 300);
     const execution = fixture.orchestrator.execute(false);
-    await waitFor(() => Object.values(fixture.run.workers).filter((worker: any) => worker.status === "working").length === 2);
+    // Creating two Git worktrees can exceed five seconds on a loaded Windows
+    // runner. Wait for the state transition rather than racing setup latency.
+    await waitFor(() => Object.values(fixture.run.workers).filter((worker: any) => worker.status === "working").length === 2, 20_000);
     await fixture.orchestrator.pause();
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.deepEqual(fixture.run.merged, []);
@@ -150,10 +152,11 @@ test("stall watchdog exempts a long-running active tool", async () => {
 test("stall watchdog treats streaming thinking updates as activity", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-thinking-"));
   try {
-    const fixture = await makeOrchestratorFixture(root, "thinking", 2_500, async () => "stop", { FAKE_PI_THINKING: "1" });
-    // 200ms threshold vs 20ms delta cadence: still fails without the
-    // message_update fix, but tolerates event-loop backlog on loaded CI hosts.
-    fixture.config.worker.stallSec = 0.2;
+    const fixture = await makeOrchestratorFixture(root, "thinking", 6_000, async () => "stop", { FAKE_PI_THINKING: "1" });
+    // A silent worker still receives two watchdog checks and fails before the
+    // fake turn finishes. Two seconds also leaves enough room for scheduler
+    // jitter on hosted Windows runners (production enforces at least 10s).
+    fixture.config.worker.stallSec = 2;
     await fixture.orchestrator.execute(false);
     assert.equal(fixture.run.phase, "done", fixture.run.error);
     assert.deepEqual(fixture.run.merged, ["a", "b"]);
@@ -367,7 +370,7 @@ rl.on("line", (line) => {
   else if (cmd.type === "prompt") {
     out({ id: cmd.id, type: "response", command: "prompt", success: true });
     if (activeTool) out({ type: "tool_execution_start", toolName: "bash", args: { command: "long-running-test" } });
-    if (thinking) thinkingTimer = setInterval(() => out({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "reasoning" } }), 20);
+    if (thinking) thinkingTimer = setInterval(() => out({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "reasoning" } }), 100);
     if (requestUi) {
       waitingUi = true;
       const emitUi = () => out({ type: "extension_ui_request", id: "ui-" + workerId, method: "confirm", title: "approve " + workerId, message: "continue?" });
