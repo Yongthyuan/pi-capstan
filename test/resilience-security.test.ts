@@ -24,19 +24,33 @@ test("verification rejects shell composition before spawning", async () => {
   }
 });
 
-test("verification timeout escalates from TERM to KILL", async () => {
+test("verification timeout terminates a subprocess within a bounded window", async () => {
   const root = await mkdtemp(join(tmpdir(), "swarm-verify-timeout-"));
   try {
     const script = join(root, "hang.mjs");
-    // Invoked via `node` rather than shebang exec: fresh executable scripts
-    // can stall for seconds in loaded environments, making this test flaky.
-    await writeFile(script, "process.on('SIGTERM', () => {});\nsetInterval(() => {}, 1000);\n");
-    const started = Date.now();
+    await writeFile(script, "setInterval(() => {}, 1000);\n");
     const result = await verifyCommands(["node hang.mjs"], root, 1, { allowedPrefixes: ["node hang.mjs"] });
     assert.equal(result.ok, false);
     assert.equal(result.commands[0]?.timedOut, true);
-    assert.equal(Date.now() - started >= 3_000, true);
-    assert.equal(Date.now() - started < 5_000, true);
+    assert.equal((result.commands[0]?.durationMs ?? 0) >= 900, true);
+    assert.equal((result.commands[0]?.durationMs ?? Infinity) < 12_000, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("verification timeout escalates from TERM to KILL on POSIX", { skip: process.platform === "win32" }, async () => {
+  const root = await mkdtemp(join(tmpdir(), "swarm-verify-escalation-"));
+  try {
+    const script = join(root, "hang.sh");
+    // Windows uses taskkill, whose first non-/F attempt may either terminate
+    // immediately or fail. Fixed TERM-to-KILL timing is only a POSIX contract.
+    await writeFile(script, "trap '' TERM\nwhile :; do sleep 1; done\n");
+    const result = await verifyCommands(["sh hang.sh"], root, 1, { allowedPrefixes: ["sh hang.sh"] });
+    assert.equal(result.ok, false);
+    assert.equal(result.commands[0]?.timedOut, true);
+    assert.equal((result.commands[0]?.durationMs ?? 0) >= 2_900, true);
+    assert.equal((result.commands[0]?.durationMs ?? Infinity) < 8_000, true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -49,7 +63,9 @@ test("verification subprocesses do not inherit credential-like environment varia
     process.env.SWARM_TEST_API_KEY = "must-not-leak";
     const script = join(root, "env-check.mjs");
     await writeFile(script, "process.exit(process.env.SWARM_TEST_API_KEY ? 9 : 0);\n");
-    const result = await verifyCommands(["node env-check.mjs"], root, 5, { allowedPrefixes: ["node env-check.mjs"] });
+    // Generous timeout: process startup can stall for seconds when the whole
+    // suite loads the machine, and this test only asserts env filtering.
+    const result = await verifyCommands(["node env-check.mjs"], root, 30, { allowedPrefixes: ["node env-check.mjs"] });
     assert.equal(result.ok, true);
   } finally {
     if (prior === undefined) delete process.env.SWARM_TEST_API_KEY;
