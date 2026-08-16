@@ -6,6 +6,16 @@ import { COMPLETIONS, parseSwarmCommand } from "./command.ts";
 import { SwarmService } from "./service.ts";
 import { assessPiCompatibility } from "./compat.ts";
 
+// Export plugin system for external use
+export type {
+  VerificationStrategy,
+  SchedulingStrategy,
+  CollaborationPrimitive,
+  PluginRegistry,
+} from './plugins/index.js';
+export { DefaultPluginRegistry } from './plugins/index.js';
+export type { Subtask, SwarmPlan, VerificationResult } from './types.js';
+
 export default function swarmExtension(pi: ExtensionAPI) {
   // Workers explicitly disable extension discovery, but this also prevents recursion
   // if a user manually starts a worker without --no-extensions.

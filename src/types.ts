@@ -309,6 +309,9 @@ export interface SwarmConfig {
     verifyAllowedPrefixes: string[];
     setupAllowedPrefixes: string[];
     failurePolicy: "fail-fast" | "continue-independent";
+    verificationStrategy?: string; // Path to custom verification plugin
+    schedulingStrategy?: string; // Path to custom scheduling plugin
+    collaborationPrimitives?: string[]; // Paths to collaboration plugins
   };
   approvalPolicy: "route" | "autoDeny" | "autoAllow";
   bashDenylist: string[];
