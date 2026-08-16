@@ -1,0 +1,19 @@
+{
+  "$schema": "../../schema/swarm-config.schema.json",
+  "worker": {
+    "bestOfN": 3,
+    "bestOfNJudge": true,
+    "maxRetries": 3,
+    "perAgentBudgetUsd": 5
+  },
+  "run": {
+    "budgetUsd": 60,
+    "mergeStrategy": "branch",
+    "verify": {
+      "worker": ["npm test"],
+      "integrationLight": ["npm run typecheck"],
+      "full": ["npm test", "npm run typecheck", "npm run lint"]
+    },
+    "failurePolicy": "fail-fast"
+  }
+}

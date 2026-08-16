@@ -1,0 +1,19 @@
+{
+  "$schema": "../../schema/swarm-config.schema.json",
+  "worker": {
+    "strictBash": true,
+    "scopeViolationPolicy": "fail",
+    "tools": ["read", "edit", "write", "grep", "find", "ls", "swarm_send", "swarm_inbox", "swarm_fs"],
+    "maxRetries": 1
+  },
+  "approvalPolicy": "autoDeny",
+  "run": {
+    "budgetUsd": 10,
+    "mergeStrategy": "branch",
+    "verify": {
+      "worker": null,
+      "integrationLight": null,
+      "full": null
+    }
+  }
+}

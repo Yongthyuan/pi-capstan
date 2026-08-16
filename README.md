@@ -61,9 +61,21 @@ The main Pi model can also call the `swarm_delegate` tool, but it cannot bypass 
 
 `/swarm pr [runId]` asks for confirmation again, then pushes only the last-green integration branch and creates a PR through the GitHub CLI; local RPC logs, sessions, and report bodies never end up in the PR. Remote CI is still governed by the target repository's own rules.
 
+## Documentation
+
+**For Claude and developers**: Comprehensive documentation is available in the [`docs/`](./docs/) directory:
+
+- **[docs/README.md](./docs/README.md)** - Start here: quick reference, common patterns, and how Claude should use swarm
+- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** - Complete reference for all 89 configuration options with examples
+- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** - Guide for extending swarm with custom tools, strategies, and templates
+
+These docs enable Claude to read, understand, and customize swarm behavior by generating appropriate configurations and extensions based on project needs.
+
 ## Configuration
 
 Merge order: built-in defaults → `~/.pi/agent/swarm.json` → `<repo>/.pi/swarm.json` → command-line flags.
+
+See [docs/CONFIGURATION.md](./docs/CONFIGURATION.md) for complete details and common configuration patterns.
 
 Safety defaults:
 

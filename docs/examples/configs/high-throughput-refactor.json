@@ -1,0 +1,24 @@
+{
+  "$schema": "../../schema/swarm-config.schema.json",
+  "planner": {
+    "maxSubtasks": 12,
+    "budgetUsd": 2,
+    "repoMapTokens": 8000
+  },
+  "worker": {
+    "maxConcurrency": 8,
+    "perAgentBudgetUsd": 3,
+    "maxRetries": 3,
+    "bestOfN": 1
+  },
+  "run": {
+    "budgetUsd": 40,
+    "failurePolicy": "continue-independent",
+    "mergeStrategy": "branch",
+    "verify": {
+      "worker": null,
+      "integrationLight": ["npm run typecheck"],
+      "full": ["npm test", "npm run typecheck"]
+    }
+  }
+}

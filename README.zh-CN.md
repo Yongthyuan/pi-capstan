@@ -61,9 +61,21 @@ Pi 主模型也可以调用 `swarm_delegate` 工具，但不会绕过人工计�
 
 `/swarm pr [runId]` 会再次确认，然后只推送 last-green integration branch 并通过 GitHub CLI 创建 PR；本地 RPC 日志、session 和 report 正文不会被放进 PR。远端 CI 仍由目标仓库自己的规则决定。
 
+## 文档
+
+**给 Claude 和开发者**：完整的文档位于 [`docs/`](./docs/) 目录：
+
+- **[docs/README.md](./docs/README.md)** - 从这里开始：快速参考、常见模式和 Claude 使用指南
+- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** - 全部 89 个配置项的完整参考和示例
+- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** - 扩展 swarm 的指南：自定义工具、策略和模板
+
+这些文档让 Claude 能够阅读、理解和定制 swarm 行为，根据项目需求生成合适的配置和扩展。
+
 ## 配置
 
 合并顺序：内置默认值 → `~/.pi/agent/swarm.json` → `<repo>/.pi/swarm.json` → 命令行 flags。
+
+完整细节和常见配置模式请参考 [docs/CONFIGURATION.md](./docs/CONFIGURATION.md)。
 
 安全默认值：
 

@@ -1,9 +1,11 @@
 # Pi-Swarm Documentation Index
 
-> **For Claude**: Start here to understand pi-swarm's capabilities and how to customize it for specific needs.
+> **For Claude**: Read [FOR_CLAUDE.md](./FOR_CLAUDE.md) first for a complete guide on how to use these docs to generate configurations and customize swarm behavior.
 
 ## Quick Links
 
+- **[FOR_CLAUDE.md](./FOR_CLAUDE.md)** - Complete guide for Claude: how to read docs and generate configurations
+- **[examples/](./examples/)** - Ready-to-use configuration templates and extension examples
 - **[CONFIGURATION.md](./CONFIGURATION.md)** - Complete reference for all 89 configuration options
 - **[EXTENSION_POINTS.md](./EXTENSION_POINTS.md)** - How to extend swarm with custom tools, strategies, and templates
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System design, components, and data flow (coming soon)

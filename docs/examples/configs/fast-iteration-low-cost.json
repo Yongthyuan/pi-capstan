@@ -1,0 +1,22 @@
+{
+  "$schema": "../../schema/swarm-config.schema.json",
+  "planner": {
+    "maxSubtasks": 4,
+    "budgetUsd": 0.5,
+    "repoMapTokens": 2000
+  },
+  "worker": {
+    "maxConcurrency": 2,
+    "perAgentBudgetUsd": 1,
+    "bestOfN": 1,
+    "maxRetries": 1
+  },
+  "run": {
+    "budgetUsd": 5,
+    "mergeStrategy": "branch",
+    "failurePolicy": "continue-independent"
+  },
+  "caseStore": {
+    "enabled": true
+  }
+}
