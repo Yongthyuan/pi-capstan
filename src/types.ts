@@ -331,7 +331,7 @@ export interface SwarmConfig {
 }
 
 export interface ParsedSwarmCommand {
-  action: "run" | "board" | "pause" | "resume" | "abort" | "merge" | "pr" | "replan" | "clean" | "cases" | "replay" | "config" | "status" | "help";
+  action: "run" | "board" | "pause" | "resume" | "abort" | "merge" | "pr" | "replan" | "clean" | "cases" | "replay" | "config" | "validate" | "status" | "help";
   task: string;
   force: boolean;
   solo: boolean;

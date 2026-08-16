@@ -15,6 +15,7 @@ import { reviewPlan } from "./ui/plan-panel.ts";
 import { renderRunText, showDashboard, widgetLines } from "./ui/dashboard.ts";
 import { RepoLock } from "./repo-lock.ts";
 import { validatePlan } from "./plan-validation.ts";
+import { validateConfig, formatValidationResult, autoFixConfig } from "./config-validator.ts";
 
 export class SwarmService {
   readonly pi: ExtensionAPI;
@@ -45,6 +46,7 @@ export class SwarmService {
     if (parsed.action === "cases") return this.cases(ctx, parsed.rest);
     if (parsed.action === "replay") return this.replay(ctx, parsed.rest[0]);
     if (parsed.action === "config") return this.configure(ctx);
+    if (parsed.action === "validate") return this.validateConfiguration(ctx);
     return this.help(ctx);
   }
 
@@ -425,8 +427,39 @@ export class SwarmService {
     ctx.ui.notify(`已写入 ${path}`, "info");
   }
 
+  private async validateConfiguration(ctx: ExtensionContext): Promise<void> {
+    const repoRoot = await detectRepoRoot(ctx.cwd) ?? ctx.cwd;
+    const config = await loadConfig(this.agentDir, repoRoot, this.configDirName);
+
+    const result = validateConfig(config);
+    const formatted = formatValidationResult(result);
+
+    ctx.ui.notify(formatted, result.valid ? "info" : "warning");
+
+    if (!result.valid || result.issues.some(i => i.level === "warning")) {
+      if (await ctx.ui.confirm("配置验证", "是否尝试自动修复问题？")) {
+        const { fixed, changes } = autoFixConfig(config);
+
+        if (changes.length > 0) {
+          const changesText = "自动修复:\n" + changes.map(c => `  • ${c}`).join("\n");
+          ctx.ui.notify(changesText, "info");
+
+          const edited = await ctx.ui.editor("查看修复后的配置", JSON.stringify(fixed, null, 2));
+          if (edited) {
+            const path = join(repoRoot, this.configDirName, "swarm.json");
+            await ensurePrivateDir(join(repoRoot, this.configDirName));
+            await writeFile(path, `${edited.trim()}\n`, { mode: 0o600 });
+            ctx.ui.notify(`已写入 ${path}`, "info");
+          }
+        } else {
+          ctx.ui.notify("未找到可自动修复的问题", "info");
+        }
+      }
+    }
+  }
+
   private help(ctx: ExtensionContext): void {
-    ctx.ui.notify("/swarm <task> [--force --plan-only --max N --budget USD --best-of N --model provider/id]\n/swarm board|pause|resume [runId]|abort|merge [runId]|pr [runId]|replan|clean|cases|replay|config|status", "info");
+    ctx.ui.notify("/swarm <task> [--force --plan-only --max N --budget USD --best-of N --model provider/id]\n/swarm board|pause|resume [runId]|abort|merge [runId]|pr [runId]|replan|clean|cases|replay|config|validate|status", "info");
   }
 }
 
