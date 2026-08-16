@@ -1,6 +1,6 @@
 import type { ParsedSwarmCommand } from "./types.ts";
 
-const ACTIONS = new Set(["board", "pause", "resume", "abort", "merge", "pr", "replan", "clean", "cases", "replay", "config", "validate", "status", "help"]);
+const ACTIONS = new Set(["board", "pause", "resume", "abort", "merge", "pr", "replan", "clean", "cases", "replay", "config", "validate", "analyze", "status", "help"]);
 
 export function splitArgs(input: string): string[] {
   const result: string[] = [];
@@ -87,6 +87,7 @@ export const COMPLETIONS = [
   "replay",
   "config",
   "validate",
+  "analyze",
   "status",
   "help",
   "--force",
@@ -96,4 +97,7 @@ export const COMPLETIONS = [
   "--budget",
   "--best-of",
   "--model",
+  "--limit",
+  "--recommendations",
+  "--summary-only",
 ];

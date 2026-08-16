@@ -8,9 +8,9 @@ Pi-swarm is designed to be extended at several architectural layers:
 
 1. **Configuration** - 89 config options in `swarm.json` (see CONFIGURATION.md)
 2. **Custom Guards** - Inject custom tools and policies into workers
-3. **Verification Strategies** - Plugin-based verification (planned)
-4. **Scheduler Strategies** - Custom task scheduling logic (planned)
-5. **Coordination Primitives** - New worker collaboration tools (planned)
+3. **Verification Strategies** - Plugin-based verification (see PLUGINS.md)
+4. **Scheduler Strategies** - Custom task scheduling logic (see PLUGINS.md)
+5. **Coordination Primitives** - Worker collaboration plugins (see PLUGINS.md)
 
 ## 1. Custom Guard Extensions (Available Now)
 

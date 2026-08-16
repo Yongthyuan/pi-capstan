@@ -71,6 +71,9 @@ export const DEFAULT_CONFIG: SwarmConfig = {
     ],
     setupAllowedPrefixes: ["npm ci", "npm install", "pnpm install", "yarn install", "bun install", "python -m pip install", "python3 -m pip install", "uv sync", "cargo fetch"],
     failurePolicy: "continue-independent",
+    verificationStrategy: null,
+    schedulingStrategy: null,
+    collaborationPrimitives: [],
   },
   approvalPolicy: "route",
   bashDenylist: [
@@ -111,10 +114,21 @@ async function readJsonIfPresent(path: string): Promise<unknown> {
 export async function loadConfig(agentDir: string, repoRoot: string, configDirName: string): Promise<SwarmConfig> {
   let config = structuredClone(DEFAULT_CONFIG);
   const globalConfig = await readJsonIfPresent(join(agentDir, "swarm.json"));
-  if (globalConfig) config = deepMerge(config, globalConfig);
+  if (globalConfig) config = deepMerge(config, stripMetaKeys(globalConfig));
   const projectConfig = await readJsonIfPresent(join(repoRoot, configDirName, "swarm.json"));
-  if (projectConfig) config = deepMerge(config, projectConfig);
+  if (projectConfig) config = deepMerge(config, stripMetaKeys(projectConfig));
   return validateConfig(config);
+}
+
+/** Drop documentation-only keys like `$wizard` before merging into SwarmConfig. */
+function stripMetaKeys(value: unknown): unknown {
+  if (!isPlainObject(value)) return value;
+  const result: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    if (key.startsWith("$")) continue;
+    result[key] = isPlainObject(nested) ? stripMetaKeys(nested) : nested;
+  }
+  return result;
 }
 
 export function validateConfig(config: SwarmConfig): SwarmConfig {
@@ -166,6 +180,16 @@ export function validateConfig(config: SwarmConfig): SwarmConfig {
   if (!["fail", "revert"].includes(config.worker.scopeViolationPolicy)) throw new Error("worker.scopeViolationPolicy 非法");
   config.worker.strictBash = Boolean(config.worker.strictBash);
   if (!["fail-fast", "continue-independent"].includes(config.run.failurePolicy)) throw new Error("run.failurePolicy 非法");
+  if (config.run.verificationStrategy != null && typeof config.run.verificationStrategy !== "string") {
+    throw new Error("run.verificationStrategy 必须是字符串路径或 null");
+  }
+  if (config.run.schedulingStrategy != null && typeof config.run.schedulingStrategy !== "string") {
+    throw new Error("run.schedulingStrategy 必须是字符串路径或 null");
+  }
+  if (config.run.collaborationPrimitives == null) config.run.collaborationPrimitives = [];
+  if (!Array.isArray(config.run.collaborationPrimitives) || config.run.collaborationPrimitives.some((item) => typeof item !== "string")) {
+    throw new Error("run.collaborationPrimitives 必须是字符串数组");
+  }
   if (!["lexical", "hybrid"].includes(config.caseStore.matcher)) throw new Error("caseStore.matcher 非法");
   config.caseStore.max = clampInt(config.caseStore.max, 1, 10_000);
   config.caseStore.threshold = Math.min(1, Math.max(0, Number(config.caseStore.threshold) || 0));

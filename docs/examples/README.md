@@ -102,6 +102,14 @@ cp docs/examples/configs/fast-iteration-low-cost.json ~/.pi/agent/swarm.json
 }
 ```
 
+## Plugin Examples
+
+Located in [`plugins/`](./plugins/) — see also [TEMPLATES.md](./TEMPLATES.md) and [../PLUGINS.md](../PLUGINS.md).
+
+- [incremental-verifier.ts](./plugins/incremental-verifier.ts) — run only affected tests
+- [adaptive-scheduler.ts](./plugins/adaptive-scheduler.ts) — adjust concurrency from conflict/cost signals
+- [shared-kv-store.ts](./plugins/shared-kv-store.ts) — shared key-value coordination primitive
+
 ## Extension Examples
 
 Located in [`extensions/`](./extensions/):

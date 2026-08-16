@@ -109,31 +109,31 @@ export function validateConfig(config: SwarmConfig): ValidationResult {
   }
 
   // Verification 验证
-  if (config.run.verification.timeoutSec < 30) {
+  if (config.run.verifyTimeoutSec < 30) {
     issues.push({
-      path: "run.verification.timeoutSec",
+      path: "run.verifyTimeoutSec",
       level: "warning",
-      message: `verification.timeoutSec (${config.run.verification.timeoutSec}) 过短`,
+      message: `verifyTimeoutSec (${config.run.verifyTimeoutSec}) 过短`,
       suggestion: "推荐至少 60 秒",
     });
   }
 
   // Merge 验证
-  if (config.run.merge.strategy !== "branch" && config.run.merge.strategy !== "apply" && config.run.merge.strategy !== "commit") {
+  if (config.run.mergeStrategy !== "branch" && config.run.mergeStrategy !== "apply" && config.run.mergeStrategy !== "commit") {
     issues.push({
-      path: "run.merge.strategy",
+      path: "run.mergeStrategy",
       level: "error",
-      message: `merge.strategy (${config.run.merge.strategy}) 无效`,
+      message: `mergeStrategy (${config.run.mergeStrategy}) 无效`,
       suggestion: "必须是 'branch', 'apply', 或 'commit'",
     });
   }
 
-  // Bash 验证
-  if (config.worker.bash.allowed.length === 0) {
+  // Bash / tools 验证
+  if (!config.worker.tools.includes("bash")) {
     issues.push({
-      path: "worker.bash.allowed",
+      path: "worker.tools",
       level: "info",
-      message: "bash.allowed 为空，workers 无法执行任何 shell 命令",
+      message: "worker.tools 未包含 bash，workers 无法执行 shell 命令",
     });
   }
 
@@ -237,9 +237,9 @@ export function autoFixConfig(config: SwarmConfig): { fixed: SwarmConfig; change
   }
 
   // 修复 merge strategy
-  if (fixed.run.merge.strategy !== "branch" && fixed.run.merge.strategy !== "apply" && fixed.run.merge.strategy !== "commit") {
-    fixed.run.merge.strategy = "branch";
-    changes.push("run.merge.strategy 设置为 'branch'");
+  if (fixed.run.mergeStrategy !== "branch" && fixed.run.mergeStrategy !== "apply" && fixed.run.mergeStrategy !== "commit") {
+    fixed.run.mergeStrategy = "branch";
+    changes.push("run.mergeStrategy 设置为 'branch'");
   }
 
   return { fixed, changes };

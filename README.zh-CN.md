@@ -66,10 +66,14 @@ Pi 主模型也可以调用 `swarm_delegate` 工具，但不会绕过人工计�
 **给 Claude 和开发者**：完整的文档位于 [`docs/`](./docs/) 目录：
 
 - **[docs/README.md](./docs/README.md)** - 从这里开始：快速参考、常见模式和 Claude 使用指南
+- **[docs/DESIGN_PHILOSOPHY.md](./docs/DESIGN_PHILOSOPHY.md)** - Agent 可配置 Swarm 的设计哲学
 - **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** - 全部 89 个配置项的完整参考和示例
 - **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** - 扩展 swarm 的指南：自定义工具、策略和模板
+- **[docs/PLUGINS.md](./docs/PLUGINS.md)** - 验证 / 调度 / 协作插件 API
 
 这些文档让 Claude 能够阅读、理解和定制 swarm 行为，根据项目需求生成合适的配置和扩展。
+
+在 Pi 内可用 `/swarm config`（向导）、`/swarm validate`、`/swarm analyze` 生成、校验并改进项目配置。
 
 ## 配置
 

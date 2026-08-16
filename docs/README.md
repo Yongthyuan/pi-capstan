@@ -5,9 +5,11 @@
 ## Quick Links
 
 - **[FOR_CLAUDE.md](./FOR_CLAUDE.md)** - Complete guide for Claude: how to read docs and generate configurations
+- **[DESIGN_PHILOSOPHY.md](./DESIGN_PHILOSOPHY.md)** - Why pi-swarm is agent-configurable and Pi-aligned
 - **[examples/](./examples/)** - Ready-to-use configuration templates and extension examples
 - **[CONFIGURATION.md](./CONFIGURATION.md)** - Complete reference for all 89 configuration options
 - **[EXTENSION_POINTS.md](./EXTENSION_POINTS.md)** - How to extend swarm with custom tools, strategies, and templates
+- **[PLUGINS.md](./PLUGINS.md)** - Plugin API for verification, scheduling, and collaboration
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System design, components, and data flow (coming soon)
 
 ## What is Pi-Swarm?

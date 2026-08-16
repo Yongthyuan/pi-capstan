@@ -16,6 +16,8 @@ import { renderRunText, showDashboard, widgetLines } from "./ui/dashboard.ts";
 import { RepoLock } from "./repo-lock.ts";
 import { validatePlan } from "./plan-validation.ts";
 import { validateConfig, formatValidationResult, autoFixConfig } from "./config-validator.ts";
+import { RunAnalyzer } from "./analyzer.ts";
+import { generateConfigFromAnswers, describeConfig, writeConfigWithComments, type WizardAnswers } from "./config-wizard.ts";
 
 export class SwarmService {
   readonly pi: ExtensionAPI;
@@ -47,6 +49,7 @@ export class SwarmService {
     if (parsed.action === "replay") return this.replay(ctx, parsed.rest[0]);
     if (parsed.action === "config") return this.configure(ctx);
     if (parsed.action === "validate") return this.validateConfiguration(ctx);
+    if (parsed.action === "analyze") return this.analyzeRuns(ctx, parsed.rest);
     return this.help(ctx);
   }
 
@@ -417,14 +420,106 @@ export class SwarmService {
 
   private async configure(ctx: ExtensionContext): Promise<void> {
     const repoRoot = await detectRepoRoot(ctx.cwd) ?? ctx.cwd;
+    const useWizard = await ctx.ui.confirm(
+      "Configuration wizard",
+      "Use the interactive wizard to generate a project config? (No opens the JSON editor.)",
+    );
+    if (useWizard) return this.configureWithWizard(ctx, repoRoot);
+
     const config = await loadConfig(this.agentDir, repoRoot, this.configDirName);
-    const edited = await ctx.ui.editor("项目 Swarm 配置", JSON.stringify(config, null, 2));
+    const edited = await ctx.ui.editor("Project Swarm config", JSON.stringify(config, null, 2));
     if (!edited) return;
     JSON.parse(edited);
     const path = join(repoRoot, this.configDirName, "swarm.json");
     await ensurePrivateDir(join(repoRoot, this.configDirName));
     await writeFile(path, `${edited.trim()}\n`, { mode: 0o600 });
-    ctx.ui.notify(`已写入 ${path}`, "info");
+    ctx.ui.notify(`Wrote ${path}`, "info");
+  }
+
+  private async configureWithWizard(ctx: ExtensionContext, repoRoot: string): Promise<void> {
+    ctx.ui.notify("Configuration wizard — edit the template, keep one option per section.", "info");
+    const questionsText = `# Pi-Swarm configuration wizard
+
+Keep one choice per section (delete the others).
+
+## 1. Use case (required)
+- large-refactor
+- production-feature
+- untrusted-code
+- fast-iteration
+
+## 2. Max budget USD (optional)
+maxBudget: 20
+
+## 3. Quality preference (required)
+- fast
+- balanced
+- high
+
+## 4. Verification level (required)
+- minimal
+- standard
+- comprehensive
+`;
+    const response = await ctx.ui.editor("Configuration wizard", questionsText);
+    if (!response) {
+      ctx.ui.notify("Cancelled", "info");
+      return;
+    }
+
+    const answers: WizardAnswers = {
+      useCase: "production-feature",
+      qualityLevel: "balanced",
+      verification: "standard",
+    };
+    for (const line of response.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("-")) {
+        const value = trimmed.slice(1).trim().split("#")[0]!.trim();
+        if (["large-refactor", "production-feature", "untrusted-code", "fast-iteration"].includes(value)) {
+          answers.useCase = value as WizardAnswers["useCase"];
+        } else if (["fast", "balanced", "high"].includes(value)) {
+          answers.qualityLevel = value as WizardAnswers["qualityLevel"];
+        } else if (["minimal", "standard", "comprehensive"].includes(value)) {
+          answers.verification = value as WizardAnswers["verification"];
+        }
+      } else if (trimmed.startsWith("maxBudget:")) {
+        const budget = Number(trimmed.split(":")[1]?.trim());
+        if (Number.isFinite(budget) && budget > 0) answers.maxBudget = budget;
+      }
+    }
+
+    const config = generateConfigFromAnswers(answers);
+    ctx.ui.notify(`\n${describeConfig(config, answers)}\n`, "info");
+    if (!(await ctx.ui.confirm("Save configuration", "Save this configuration to the project?"))) {
+      ctx.ui.notify("Cancelled", "info");
+      return;
+    }
+    const configPath = join(repoRoot, this.configDirName, "swarm.json");
+    await ensurePrivateDir(join(repoRoot, this.configDirName));
+    writeConfigWithComments(configPath, config, answers);
+    ctx.ui.notify(`Saved ${configPath}\nSee docs/CONFIGURATION.md and docs/examples/TEMPLATES.md`, "info");
+  }
+
+  private async analyzeRuns(ctx: ExtensionContext, args: string[]): Promise<void> {
+    const repoRoot = await detectRepoRoot(ctx.cwd) ?? ctx.cwd;
+    const limitFlag = args.findIndex((arg) => arg === "--limit");
+    const limit = limitFlag >= 0 ? Math.max(1, Number(args[limitFlag + 1]) || 50) : 50;
+    const wantRecommendations = args.includes("--recommendations") || !args.includes("--summary-only");
+    const analyzer = new RunAnalyzer(join(repoRoot, this.configDirName, "swarm", "runs"));
+    const summaries = await analyzer.loadRunHistory(limit);
+    if (!summaries.length) {
+      ctx.ui.notify("No swarm runs found to analyze.", "warning");
+      return;
+    }
+    const trends = await analyzer.analyzeTrends(summaries);
+    const recommendations = wantRecommendations ? await analyzer.getRecommendations(trends) : [];
+    const report = analyzer.formatReport(summaries, trends, recommendations);
+    this.pi.sendMessage(
+      { customType: "swarm-report", content: report, display: true, details: { analyze: true } },
+      { deliverAs: "nextTurn" },
+    );
+    ctx.ui.notify(`Analyzed ${summaries.length} run(s). Report injected into the session.`, "info");
   }
 
   private async validateConfiguration(ctx: ExtensionContext): Promise<void> {
@@ -459,7 +554,7 @@ export class SwarmService {
   }
 
   private help(ctx: ExtensionContext): void {
-    ctx.ui.notify("/swarm <task> [--force --plan-only --max N --budget USD --best-of N --model provider/id]\n/swarm board|pause|resume [runId]|abort|merge [runId]|pr [runId]|replan|clean|cases|replay|config|validate|status", "info");
+    ctx.ui.notify("/swarm <task> [--force --plan-only --max N --budget USD --best-of N --model provider/id]\n/swarm board|pause|resume [runId]|abort|merge [runId]|pr [runId]|replan|clean|cases|replay|config|validate|analyze|status", "info");
   }
 }
 

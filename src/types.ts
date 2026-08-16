@@ -309,6 +309,12 @@ export interface SwarmConfig {
     verifyAllowedPrefixes: string[];
     setupAllowedPrefixes: string[];
     failurePolicy: "fail-fast" | "continue-independent";
+    /** Path to a VerificationStrategy plugin module (default export). */
+    verificationStrategy?: string | null;
+    /** Path to a SchedulingStrategy plugin module (default export). */
+    schedulingStrategy?: string | null;
+    /** Paths to CollaborationPrimitive plugin modules (default export). */
+    collaborationPrimitives?: string[];
   };
   approvalPolicy: "route" | "autoDeny" | "autoAllow";
   bashDenylist: string[];
@@ -331,7 +337,7 @@ export interface SwarmConfig {
 }
 
 export interface ParsedSwarmCommand {
-  action: "run" | "board" | "pause" | "resume" | "abort" | "merge" | "pr" | "replan" | "clean" | "cases" | "replay" | "config" | "validate" | "status" | "help";
+  action: "run" | "board" | "pause" | "resume" | "abort" | "merge" | "pr" | "replan" | "clean" | "cases" | "replay" | "config" | "validate" | "analyze" | "status" | "help";
   task: string;
   force: boolean;
   solo: boolean;

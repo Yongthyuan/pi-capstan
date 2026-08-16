@@ -11,6 +11,10 @@ import { validatePlan } from "./plan-validation.ts";
 import { buildReport } from "./reporter.ts";
 import { RepoLock } from "./repo-lock.ts";
 import { processIdentityStatus, stopOwnedProcess } from "./process-identity.ts";
+import { MetricsCollector } from "./metrics.ts";
+import { loadConfiguredPlugins } from "./plugin-loader.ts";
+import type { DefaultPluginRegistry } from "./plugins/registry.ts";
+import type { VerificationStrategy } from "./plugins/interfaces.ts";
 
 export interface OrchestratorHooks {
   projectTrusted: boolean;
@@ -78,6 +82,9 @@ export class Orchestrator {
   private startedAt = Date.now();
   private finalVerification?: VerificationResult;
   private landingNote?: string;
+  readonly metrics: MetricsCollector;
+  private plugins?: DefaultPluginRegistry;
+  private effectiveConcurrency: number;
 
   constructor(options: OrchestratorOptions) {
     this.run = options.run;
@@ -88,6 +95,8 @@ export class Orchestrator {
     this.hooks = options.hooks;
     this.workerFactory = options.workerFactory ?? ((workerOptions) => new WorkerHandle(workerOptions));
     this.repoLock = options.repoLock;
+    this.metrics = new MetricsCollector(this.run.runId, join(this.run.runDir, "metrics.jsonl"));
+    this.effectiveConcurrency = this.config.worker.maxConcurrency;
     this.run.effectiveBudget ??= {
       workerBudgetUsd: this.config.worker.perAgentBudgetUsd,
       workerTokenLimit: this.config.worker.perAgentTokenLimit,
@@ -112,6 +121,8 @@ export class Orchestrator {
     this.run.partialSuccess = false;
     this.startedAt = this.run.createdAt;
     try {
+      this.plugins = await loadConfiguredPlugins(this.config);
+      await this.applySchedulingStrategy();
       if (this.run.git) {
         for (const runtime of Object.values(this.run.workers)) {
           if (["failed", "blocked", "detached"].includes(runtime.status)) runtime.status = "pending";
@@ -182,6 +193,7 @@ export class Orchestrator {
           await this.hooks.onReport(this.run, report);
         }
       } finally {
+        await this.plugins?.cleanup().catch(() => undefined);
         await this.repoLock?.release();
       }
     }
@@ -407,6 +419,7 @@ export class Orchestrator {
     };
 
     runtime.startedAt ??= Date.now();
+    await this.metrics.recordWorkerStart(task.id, task.id);
     await this.persist();
     try {
       runtime.currentAction = "preparing worktree dependencies";
@@ -466,10 +479,12 @@ export class Orchestrator {
         if (!postScopeVerification.ok) throw new Error(`${task.id} 越界文件回滚后验证失败`);
       }
       await handle?.stop();
+      await this.metrics.recordWorkerEnd(task.id, "completed", runtime.usage.cost, runtime.retries);
       return { task, runtime, handle };
     } catch (error) {
       if (error instanceof ControlFlowError || ["detached", "killed"].includes(runtime.status) || this.abortRequested || this.interruptRequested) {
         await handle?.stop().catch(() => undefined);
+        await this.metrics.recordWorkerEnd(task.id, "aborted", runtime.usage.cost, runtime.retries).catch(() => undefined);
         await this.persist();
         return undefined;
       }
@@ -477,6 +492,7 @@ export class Orchestrator {
       runtime.currentAction = error instanceof Error ? error.message : String(error);
       runtime.endedAt = Date.now();
       await handle?.stop().catch(() => undefined);
+      await this.metrics.recordWorkerEnd(task.id, "failed", runtime.usage.cost, runtime.retries).catch(() => undefined);
       await this.persist();
       return undefined;
     } finally {
@@ -514,7 +530,7 @@ export class Orchestrator {
         }
       }
     };
-    const slots = Math.min(this.config.worker.maxConcurrency, descriptors.length);
+    const slots = Math.min(this.effectiveConcurrency, descriptors.length);
     await Promise.all(Array.from({ length: slots }, () => runSlot()));
     await Promise.all(selectionPromises);
   }
@@ -652,11 +668,20 @@ export class Orchestrator {
       await this.controlCheckpoint(runtime);
       const controller = new AbortController();
       this.verificationControllers.set(key, controller);
-      const result = await verifyCommands(commands, cwd, this.config.run.verifyTimeoutSec, {
-        signal: controller.signal,
-        allowedPrefixes: this.config.run.verifyAllowedPrefixes,
-      });
+      const started = Date.now();
+      const strategy = this.plugins?.get("verification", "configured");
+      const task = this.run.plan?.subtasks.find((item) => item.id === key || key.startsWith(item.id));
+      let result: VerificationResult;
+      if (strategy && task) {
+        result = await this.runVerificationStrategy(strategy, task, cwd, commands, controller.signal);
+      } else {
+        result = await verifyCommands(commands, cwd, this.config.run.verifyTimeoutSec, {
+          signal: controller.signal,
+          allowedPrefixes: this.config.run.verifyAllowedPrefixes,
+        });
+      }
       this.verificationControllers.delete(key);
+      await this.metrics.recordVerification(key, result.ok, Date.now() - started).catch(() => undefined);
       if (this.shouldStop(runtime)) throw new ControlFlowError("verification interrupted");
       if (this.pauseRequested || result.commands.some((command) => command.aborted)) {
         await this.controlCheckpoint(runtime);
@@ -664,6 +689,35 @@ export class Orchestrator {
       }
       return result;
     }
+  }
+
+  private async runVerificationStrategy(
+    strategy: VerificationStrategy,
+    task: Subtask,
+    cwd: string,
+    commands: string[],
+    signal: AbortSignal,
+  ): Promise<VerificationResult> {
+    let selected = commands;
+    if (strategy.selectCommands) {
+      const chosen = await strategy.selectCommands(task, cwd, { modified: [], added: [], deleted: [] });
+      if (chosen?.length) selected = chosen;
+    }
+    if (signal.aborted) {
+      return {
+        ok: false,
+        commands: selected.map((command) => ({
+          command,
+          exitCode: 1,
+          stdout: "",
+          stderr: "aborted",
+          durationMs: 0,
+          timedOut: false,
+          aborted: true,
+        })),
+      };
+    }
+    return strategy.verify(task, cwd, selected);
   }
 
   private async mergePrepared(item: PreparedWorker): Promise<void> {
@@ -676,7 +730,9 @@ export class Orchestrator {
     operation.phase = "merging";
     operation.updatedAt = Date.now();
     await this.persist();
+    const mergeStarted = Date.now();
     const result = await this.workspace.mergeTask(item.task, item.runtime.branch, operation);
+    await this.metrics.recordMergeAttempt(item.task.id, result.ok, result.ok ? 0 : result.conflicts.length, Date.now() - mergeStarted).catch(() => undefined);
     await this.controlCheckpoint(item.runtime);
     if (!result.ok) {
       const conflict: ConflictRecord = { incomingSubtask: item.task.id, files: result.conflicts, resolved: false };
@@ -1202,6 +1258,39 @@ export class Orchestrator {
     this.recomputeTotals();
     await this.store.save(this.run);
     this.hooks.onUpdate(this.run);
+  }
+
+  private async applySchedulingStrategy(): Promise<void> {
+    const strategy = this.plugins?.get("scheduling", "configured");
+    if (!strategy || !this.run.plan) return;
+    try {
+      const schedule = await strategy.schedule(this.run.plan, {
+        maxConcurrency: this.config.worker.maxConcurrency,
+        remainingBudget: Math.max(0, this.config.run.budgetUsd - (this.run.totals.cost || 0)),
+        completedTasks: [...this.run.merged],
+      });
+      if (schedule.batches?.length) {
+        // Prefer larger suggested parallel width when still within configured max.
+        const suggested = Math.max(...schedule.batches.map((batch) => batch.length), 1);
+        this.effectiveConcurrency = Math.max(1, Math.min(this.config.worker.maxConcurrency, suggested));
+      }
+      if (strategy.adjust) {
+        const adjustment = await strategy.adjust({
+          avgTaskDuration: 0,
+          conflictRate: this.run.merged.length ? this.run.conflicts.length / this.run.merged.length : 0,
+          budgetUtilization: this.config.run.budgetUsd > 0 ? this.run.totals.cost / this.config.run.budgetUsd : 0,
+          stalledWorkers: [],
+        });
+        if (typeof adjustment.newConcurrency === "number" && Number.isFinite(adjustment.newConcurrency)) {
+          this.effectiveConcurrency = Math.max(1, Math.min(8, Math.trunc(adjustment.newConcurrency)));
+        }
+      }
+    } catch (error) {
+      // Plugin failures must not abort the run; fall back to configured concurrency.
+      this.effectiveConcurrency = this.config.worker.maxConcurrency;
+      this.run.error = undefined;
+      void error;
+    }
   }
 }
 

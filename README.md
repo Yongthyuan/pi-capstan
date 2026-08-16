@@ -66,10 +66,14 @@ The main Pi model can also call the `swarm_delegate` tool, but it cannot bypass 
 **For Claude and developers**: Comprehensive documentation is available in the [`docs/`](./docs/) directory:
 
 - **[docs/README.md](./docs/README.md)** - Start here: quick reference, common patterns, and how Claude should use swarm
+- **[docs/DESIGN_PHILOSOPHY.md](./docs/DESIGN_PHILOSOPHY.md)** - Agent-configurable Swarm design philosophy
 - **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** - Complete reference for all 89 configuration options with examples
 - **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** - Guide for extending swarm with custom tools, strategies, and templates
+- **[docs/PLUGINS.md](./docs/PLUGINS.md)** - Plugin API for verification, scheduling, and collaboration
 
 These docs enable Claude to read, understand, and customize swarm behavior by generating appropriate configurations and extensions based on project needs.
+
+Use `/swarm config` (wizard), `/swarm validate`, and `/swarm analyze` to generate, check, and improve project configs from inside Pi.
 
 ## Configuration
 
