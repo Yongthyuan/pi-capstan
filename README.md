@@ -4,7 +4,7 @@
 
 Pi Agent Swarm is a native multi-agent extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). A single `/swarm <task>` command takes a complex task through complexity gating, evidence-based decomposition, plan confirmation, parallel execution in Git worktrees, verification, merging, recovery, and report injection.
 
-Current version: `0.6.0`. Positioning: a controlled beta for your own trusted repositories, not a security sandbox for untrusted code. Tested against Pi 0.84.1; required API capabilities are probed at load time. Pi `>=0.84.1` is accepted: 0.84.x loads as compatible, and newer releases load with an explicit warning instead of refusing to start.
+Current version: `0.7.0`. Positioning: a controlled beta for your own trusted repositories, not a security sandbox for untrusted code. Tested against Pi 0.84.1; required API capabilities are probed at load time. Pi `>=0.84.1` is accepted: 0.84.x loads as compatible, and newer releases load with an explicit warning instead of refusing to start.
 
 ## What it does
 

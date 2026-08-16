@@ -224,7 +224,7 @@ Compared to other multi-agent frameworks:
 
 ## Version
 
-Current: **v0.6.0**
+Current: **v0.7.0**
 
 Compatibility: Pi coding agent `>=0.84.1`
 
