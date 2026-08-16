@@ -415,6 +415,18 @@ export class SwarmService {
 
   private async configure(ctx: ExtensionContext): Promise<void> {
     const repoRoot = await detectRepoRoot(ctx.cwd) ?? ctx.cwd;
+
+    // Check if user wants wizard or direct edit
+    const useWizard = await ctx.ui.confirm(
+      "配置向导",
+      "使用交互式向导生成配置？（否则直接编辑 JSON）"
+    );
+
+    if (useWizard) {
+      return this.configureWithWizard(ctx, repoRoot);
+    }
+
+    // Original direct editor flow
     const config = await loadConfig(this.agentDir, repoRoot, this.configDirName);
     const edited = await ctx.ui.editor("项目 Swarm 配置", JSON.stringify(config, null, 2));
     if (!edited) return;
@@ -423,6 +435,95 @@ export class SwarmService {
     await ensurePrivateDir(join(repoRoot, this.configDirName));
     await writeFile(path, `${edited.trim()}\n`, { mode: 0o600 });
     ctx.ui.notify(`已写入 ${path}`, "info");
+  }
+
+  private async configureWithWizard(ctx: ExtensionContext, repoRoot: string): Promise<void> {
+    const wizardModule = await import("./config-wizard.js");
+    const { generateConfigFromAnswers, describeConfig, writeConfigWithComments } = wizardModule;
+
+    // Since ctx.ui doesn't have 'ask', we'll use editor for input
+    ctx.ui.notify("配置向导 - 将打开编辑器收集配置信息", "info");
+
+    const questionsText = `# Pi-Swarm 配置向导
+
+请回答以下问题（删除不需要的选项，保留您的选择）：
+
+## 1. 任务类型（必选一项）
+- large-refactor        # 大规模重构（50+ 文件，架构变更）
+- production-feature    # 生产功能（高质量，正确性优先）
+- untrusted-code        # 不可信代码库（最大安全性）
+- fast-iteration        # 快速迭代/PoC（低成本，实验性）
+
+## 2. 最大预算（可选，USD）
+# maxBudget: 20
+
+## 3. 质量与速度偏好（必选一项）
+- fast       # 快速（最小化时间和成本）
+- balanced   # 平衡（默认）
+- high       # 高质量（最大化正确性）
+
+## 4. 验证级别（必选一项）
+- minimal         # 最小化（不验证）
+- standard        # 标准（类型检查 + 测试）
+- comprehensive   # 全面（worker 测试 + 集成测试 + lint）
+`;
+
+    const response = await ctx.ui.editor("配置向导", questionsText);
+    if (!response) {
+      ctx.ui.notify("已取消", "info");
+      return;
+    }
+
+    // Parse responses
+    const answers: any = {
+      useCase: "production-feature",
+      qualityLevel: "balanced",
+      verification: "standard"
+    };
+
+    const lines = response.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("-") && !trimmed.startsWith("- #")) {
+        const value = trimmed.slice(1).trim().split("#")[0].trim();
+        if (["large-refactor", "production-feature", "untrusted-code", "fast-iteration"].includes(value)) {
+          answers.useCase = value;
+        } else if (["fast", "balanced", "high"].includes(value)) {
+          answers.qualityLevel = value;
+        } else if (["minimal", "standard", "comprehensive"].includes(value)) {
+          answers.verification = value;
+        }
+      } else if (trimmed.startsWith("maxBudget:")) {
+        const budget = Number(trimmed.split(":")[1].trim());
+        if (Number.isFinite(budget) && budget > 0) {
+          answers.maxBudget = budget;
+        }
+      }
+    }
+
+    // Generate config
+    const config = generateConfigFromAnswers(answers);
+    const description = describeConfig(config, answers);
+
+    // Show preview
+    ctx.ui.notify(`\n${description}\n`, "info");
+
+    const confirm = await ctx.ui.confirm(
+      "保存配置",
+      "是否保存此配置到项目？"
+    );
+
+    if (!confirm) {
+      ctx.ui.notify("已取消", "info");
+      return;
+    }
+
+    // Save config
+    const configPath = join(repoRoot, this.configDirName, "swarm.json");
+    await ensurePrivateDir(join(repoRoot, this.configDirName));
+    writeConfigWithComments(configPath, config, answers);
+
+    ctx.ui.notify(`✓ 配置已保存到 ${configPath}\n\n提示：查看 docs/CONFIGURATION.md 了解所有配置选项`, "info");
   }
 
   private help(ctx: ExtensionContext): void {

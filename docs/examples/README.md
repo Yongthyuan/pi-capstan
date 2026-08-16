@@ -2,6 +2,37 @@
 
 This directory contains ready-to-use examples for common swarm customization scenarios.
 
+## Quick Start
+
+### For Users
+
+**Use the interactive wizard:**
+```bash
+/swarm config
+# Choose "Yes" to use the wizard
+# Answer 4 questions about your use case
+# Save the generated configuration
+```
+
+**Or copy a template manually:**
+```bash
+cp docs/examples/configs/high-quality-production.json .pi/swarm.json
+```
+
+**Read detailed template guide:**
+See [TEMPLATES.md](./TEMPLATES.md) for comprehensive customization instructions.
+
+### For Claude
+
+**When a user asks you to configure swarm:**
+1. Read [TEMPLATES.md](./TEMPLATES.md) to understand available patterns
+2. Match their use case to a template
+3. Generate or customize the appropriate configuration
+4. Explain trade-offs (cost, quality, speed)
+5. Save to `.pi/swarm.json` with comments
+
+See [FOR_CLAUDE.md](../FOR_CLAUDE.md) for the complete decision tree.
+
 ## Configuration Examples
 
 Located in [`configs/`](./configs/):
