@@ -1,4 +1,4 @@
-# Pi-Swarm Documentation Index
+# Pi Agent Swarm Documentation Index
 
 > **For Claude**: Read [FOR_CLAUDE.md](./FOR_CLAUDE.md) first for a complete guide on how to use these docs to generate configurations and customize swarm behavior.
 
@@ -7,22 +7,21 @@
 - **[FOR_CLAUDE.md](./FOR_CLAUDE.md)** - Complete guide for Claude: how to read docs and generate configurations
 - **[DESIGN_PHILOSOPHY.md](./DESIGN_PHILOSOPHY.md)** - Why pi-swarm is agent-configurable and Pi-aligned
 - **[examples/](./examples/)** - Ready-to-use configuration templates and extension examples
-- **[CONFIGURATION.md](./CONFIGURATION.md)** - Complete reference for all 89 configuration options
-- **[EXTENSION_POINTS.md](./EXTENSION_POINTS.md)** - How to extend swarm with custom tools, strategies, and templates
-- **[PLUGINS.md](./PLUGINS.md)** - Plugin API for verification, scheduling, and collaboration
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System design, components, and data flow (coming soon)
+- **[CONFIGURATION.md](./CONFIGURATION.md)** - Contract for all **51** configuration leaf keys
+- **[EXTENSION_POINTS.md](./EXTENSION_POINTS.md)** - Guards (supported) and honest plugin limits
+- **[PLUGINS.md](./PLUGINS.md)** - Optional plugin API; not the main path
 
-## What is Pi-Swarm?
+## What is Pi Agent Swarm?
 
-Pi-swarm is a native multi-agent extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). It orchestrates complex coding tasks by:
+**pi-agent-swarm** is a native multi-agent extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). It is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm). It orchestrates decomposable same-repo coding tasks by:
 
-1. **Complexity Gating** - Automatically decides if a task needs multiple agents
-2. **Evidence-Based Planning** - Reads your codebase and generates a decomposition plan
-3. **Git Worktree Isolation** - Each agent works in its own isolated Git worktree
-4. **DAG Scheduling** - Executes independent tasks in parallel, respects dependencies
-5. **Contract-First Coordination** - Agents agree on interfaces before implementing
-6. **Verification & Merging** - Tests each piece before integrating
-7. **Case-Based Learning** - Learns from past runs to improve future plans
+1. **Complexity Gating** - Simple tasks bounce back to the main session
+2. **Evidence-Based Planning** - Reads your codebase and generates a DAG plan
+3. **Human plan confirmation** - Spend starts only after the user confirms
+4. **Git Worktree Isolation** - Each worker has its own worktree and path ownership
+5. **Verification & Merging** - Allowlisted commands; skip is 跳过, not a fake pass
+6. **Budgets, resume, report** - Runs stop instead of silently overspending
+7. **Optional cases** - Past plans can inform planning if you rate them
 
 ## Core Design Philosophy
 
@@ -137,10 +136,10 @@ User: "在一个不熟悉的项目上试验，要最大安全性"
 |------|----------|--------|
 | Add worker tool | Custom guard extension | ✅ Available |
 | Custom validation | Custom guard (tool_call hook) | ✅ Available |
-| Incremental tests | Verification strategy | 📋 Planned Q1 2027 |
-| Dynamic parallelism | Scheduler strategy | 📋 Planned Q2 2027 |
-| Worker sync primitives | Coordination API | 📋 Planned Q2 2027 |
-| Reusable patterns | Task templates | 📋 Planned Q3 2027 |
+| Incremental tests | Optional `run.verificationStrategy` file path | Worker lane only |
+| Dynamic parallelism | Optional `run.schedulingStrategy` | Changes concurrency, not DAG order |
+| Worker sync primitives | `swarm_send` / `swarm_inbox` | Collaboration plugins do not inject tools |
+| Reusable patterns | Copy `examples/configs/*` | No task template runtime |
 
 ## Command Quick Reference
 
@@ -219,12 +218,12 @@ Compared to other multi-agent frameworks:
 1. **Read the docs** - CONFIGURATION.md and EXTENSION_POINTS.md cover 95% of use cases
 2. **Check examples** - See "Common Configuration Patterns" in CONFIGURATION.md
 3. **Inspect state** - Use `/swarm board` to see live status
-4. **Review logs** - Check `.pi/swarm/runs/<runId>/logs/` for detailed traces
+4. **Review logs** - Check `<repo>/.pi/swarm/runs/<runId>/` (`state.json`, RPC logs)
 5. **Case library** - Use `/swarm cases` to see learned patterns
 
 ## Version
 
-Current: **v0.7.0**
+Current: **v0.8.0**
 
 Compatibility: Pi coding agent `>=0.84.1`
 

@@ -26,6 +26,12 @@ export class WorkspaceManager {
     this.worktreesRoot = options.worktreesRoot;
   }
 
+  async listUncommittedChanges(worktree: string): Promise<{ modified: string[]; added: string[]; deleted: string[] }> {
+    const status = await this.gitCommand(worktree, ["status", "--porcelain=v1", "-uall"]);
+    if (status.exitCode !== 0) return { modified: [], added: [], deleted: [] };
+    return parsePorcelainStatus(status.stdout);
+  }
+
   async detectRepo(): Promise<string | undefined> {
     const result = await this.gitCommand(this.cwd, ["rev-parse", "--show-toplevel"]);
     return result.exitCode === 0 ? result.stdout.trim() : undefined;
@@ -471,6 +477,26 @@ export class WorkspaceManager {
     this.worktreeMutationChain = result.then(() => undefined, () => undefined);
     return result;
   }
+}
+
+export function parsePorcelainStatus(text: string): { modified: string[]; added: string[]; deleted: string[] } {
+  const modified: string[] = [];
+  const added: string[] = [];
+  const deleted: string[] = [];
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/\r$/, "");
+    if (line.length < 4) continue;
+    const x = line[0]!;
+    const y = line[1]!;
+    let file = line.slice(3);
+    const renamed = file.indexOf(" -> ");
+    if (renamed !== -1) file = file.slice(renamed + 4);
+    const codes = `${x}${y}`;
+    if (codes === "??" || x === "A" || y === "A") added.push(file);
+    else if (x === "D" || y === "D") deleted.push(file);
+    else if (codes.trim()) modified.push(file);
+  }
+  return { modified, added, deleted };
 }
 
 async function pathEntryExists(path: string): Promise<boolean> {

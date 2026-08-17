@@ -48,14 +48,11 @@ export interface VerificationStrategy {
   ): Promise<string[] | null>;
 
   /**
-   * Execute verification and return results.
-   *
-   * @param task - The completed subtask
-   * @param worktreePath - Path to the worker's isolated worktree
-   * @param commands - Commands to execute (from selectCommands or task.acceptance.commands)
-   * @returns Verification result with ok/failed status
+   * Reserved. The runtime does **not** call this.
+   * Selected commands always run through `verifyCommands` (syntax gate + prefix allowlist).
+   * Plugins cannot bypass that path.
    */
-  verify(
+  verify?(
     task: Subtask,
     worktreePath: string,
     commands: string[]
@@ -166,7 +163,8 @@ export interface CollaborationPrimitive {
   /**
    * Return custom tools to inject into worker sessions.
    *
-   * Each tool will be available as a MCP tool in the worker's Pi session.
+   * Reserved. Collaboration plugins load, but `getTools()` is **not** injected into workers.
+   * Workers still use built-in `swarm_send` / `swarm_inbox`.
    */
   getTools(): Array<{
     name: string;
@@ -210,7 +208,8 @@ export interface PluginRegistry {
   register(
     type: 'verification' | 'scheduling' | 'collaboration',
     name: string,
-    modulePath: string
+    modulePath: string,
+    init?: Record<string, unknown>
   ): Promise<void>;
 
   /**

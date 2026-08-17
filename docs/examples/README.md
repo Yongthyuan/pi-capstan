@@ -40,10 +40,15 @@ Maximum safety for unfamiliar or untrusted codebases.
 
 **Features**:
 - Strict bash mode (blocks interpreter escapes)
-- No bash tool (read-only filesystem access)
+- No bash tool; edit/write remain so workers can still change owned files
 - Auto-deny all approval requests
 - Fail on scope violations (no auto-recovery)
 - Branch-only merge (never touches main)
+- Verification lanes are `[]` (skip). Does **not** auto-run the repo's own `npm test`
+
+**Use when**: Evaluating unknown projects, security audits, experimental changes
+
+This is still **not** a security sandbox for malware.
 
 **Use when**: Evaluating unknown projects, security audits, experimental changes
 

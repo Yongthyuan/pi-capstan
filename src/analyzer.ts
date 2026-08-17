@@ -177,7 +177,7 @@ export class RunAnalyzer {
         severity: "medium",
         title: "Workers retry often",
         description: `Average retries per worker ${trends.avgRetryRate.toFixed(2)}.`,
-        suggestedAction: "Improve acceptance commands, or install an incremental verification plugin.",
+        suggestedAction: "Tighten task.acceptance.commands, or set run.verify.full to an explicit test command.",
         expectedImpact: "Fewer fix loops and faster merges.",
       });
     }

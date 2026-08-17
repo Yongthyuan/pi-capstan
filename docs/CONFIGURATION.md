@@ -1,14 +1,46 @@
-# Pi-Swarm Configuration Reference
+# Pi Agent Swarm Configuration Reference
 
-> **For Claude**: This document describes all configuration options for pi-swarm. You can read this to understand how to customize swarm behavior for specific projects or tasks.
+> **For Claude**: This is the contract. There are **51** configurable leaf keys (not 89). There is **no** JSON Schema file. Project files must be pure JSON. Read [FOR_CLAUDE.md](./FOR_CLAUDE.md) first.
 
 ## Configuration Hierarchy
 
-Configurations merge in this order (later overrides earlier):
-1. Built-in defaults (see below)
+Later wins:
+1. Built-in defaults (`src/config.ts` `DEFAULT_CONFIG`)
 2. Global: `~/.pi/agent/swarm.json`
 3. Project: `<repo>/.pi/swarm.json`
-4. Command flags: `--max`, `--budget`, `--model`, `--best-of`
+4. Command flags only: `--max`, `--budget`, `--model`, `--best-of`
+
+Also valid run flags (not config merge): `--force`/`-f`, `--solo`, `--plan-only`/`-n`. Unknown flags become task text.
+
+## Verification lanes (`run.verify`)
+
+| Value | Meaning |
+|---|---|
+| `null` | Auto-detect commands for this repo |
+| `[]` | Explicit skip (report says 跳过, not ✓) |
+| `["npm test"]` | Run exactly these allowlisted commands |
+
+Worker verification **first** uses `subtask.acceptance.commands` from the confirmed plan. `run.verify.worker` is only a fallback.
+
+## Plan contract (not JSON fields)
+
+- Same-wave owned+generated paths must not overlap (`src/plan-validation.ts`).
+- Out-of-scope writes: default `worker.scopeViolationPolicy` is `"revert"`, then re-verify.
+- Humans must confirm the plan. `swarm_delegate` cannot skip that.
+- Dirty baseline can execute but never auto-applies (`mergeStrategy: "branch"` only).
+
+## Budgets and resume
+
+- Planner spend counts toward the run total.
+- Budget overrun interrupts the current model turn, then asks extend +25% or stop.
+- `/swarm pause` / `/swarm resume [runId]` persist atomically. Resume is idempotent.
+- `/swarm analyze` suggests config; it does not write `swarm.json`.
+
+## Keys that do not exist
+
+`perAgentTokens`, `verificationConfig`, `customVerifiers`, `schedulerStrategy`, `planner.templates`, `--config`, `$schema`.
+
+`safetyGuardPath` does not expand `~`. Plugin paths (`run.verificationStrategy` etc.) do.
 
 ## Complete Configuration Schema
 
@@ -27,11 +59,17 @@ Controls when a task triggers multi-agent swarm vs single-agent passthrough.
 }
 ```
 
-**Rule scoring factors**:
-- Explicit parallelism keywords: +2 each ("parallel", "concurrent", "independent")
-- Multiple deliverables: +1 per conjunction ("and", ",")
-- Architectural keywords: +2 ("refactor", "migrate", "redesign")
-- Scope indicators: +1 per ("entire", "all", "every")
+**Rule scoring** (exact match of `src/gate.ts` `ruleGate`):
+
+- +2 long task / markdown list
+- +2 two or more conjunctions (`和|以及|然后|同时|顺便|and|then|also`)
+- +2 cross-module words (`重构|迁移|全部|所有模块|across|migrate|rewrite|end-to-end`)
+- +2 at least three file/path tokens
+- +1 code + test + docs mentioned together
+- −3 single-action wording (`改一行|错别字|typo|解释|看一下|单个文件|one-line`)
+- −2 small repo (`fileCount < 30`)
+
+Then: `score ≥ ruleThresholdHigh` → swarm; `score ≤ ruleThresholdLow` or no gate model → main session; in between, ask the model (failure falls back to simple).
 
 **When to adjust**:
 - Lower threshold → more tasks use swarm (higher cost, potentially better quality)
@@ -135,12 +173,14 @@ Controls overall run execution and verification.
                                 // apply = apply to clean main worktree (危险!)
                                 // commit = commit to current branch
     
-    "verify": {                 // Verification commands at each stage
-      "worker": null,           // After each worker (null = skip)
-      "integrationLight": null, // After each merge (null = skip)
-      "full": null              // Final verification (null = skip)
-                                // Example: ["npm test", "npm run typecheck"]
+    "verify": {                 // null = auto-detect, [] = skip, array = run
+      "worker": null,           // Fallback only if plan acceptance.commands is empty
+      "integrationLight": null, // After each merge wave
+      "full": null              // Final integration verification
     },
+    "verificationStrategy": null,   // Optional module path; worker lane only
+    "schedulingStrategy": null,     // Optional module path; concurrency width only
+    "collaborationPrimitives": [],  // Loaded but tools are NOT injected into workers
     
     "verifyTimeoutSec": 300,    // Verification timeout (10-3600)
     
@@ -176,7 +216,7 @@ Controls overall run execution and verification.
 ```
 
 **When to adjust**:
-- `verify`: Add test commands for continuous validation
+- `verify`: `null` auto-detects, `[]` skips (报告写「跳过」), array runs exactly those commands
 - `mergeStrategy`: Use "branch" (safe default), only use "apply" on clean repos you trust
 - `failurePolicy`: Use "fail-fast" when failures cascade, "continue-independent" for partial success
 
@@ -267,10 +307,11 @@ Optional path to custom safety guard extension loaded into all workers.
 
 ```json
 {
-  "safetyGuardPath": null       // Path to .ts extension file, or null
-                                // Example: "~/.pi/agent/extensions/custom-guard.ts"
+  "safetyGuardPath": null
 }
 ```
+
+Use an **absolute** path. `~` is not expanded for this field.
 
 ## Common Configuration Patterns
 
@@ -322,12 +363,12 @@ Maximum safety for untrusted code.
   "worker": {
     "strictBash": true,
     "scopeViolationPolicy": "fail",
-    "tools": ["read", "edit", "write", "grep", "find", "ls"]  // No bash
+    "tools": ["read", "edit", "write", "grep", "find", "ls"]  // Keep write; drop bash. Untrusted is not a sandbox.
   },
   "approvalPolicy": "autoDeny",
   "run": {
     "mergeStrategy": "branch",
-    "verify": { "worker": null, "integrationLight": null, "full": null }
+    "verify": { "worker": [], "integrationLight": [], "full": [] }
   }
 }
 ```

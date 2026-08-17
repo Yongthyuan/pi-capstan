@@ -1,5 +1,4 @@
 {
-  "$schema": "../../schema/swarm-config.schema.json",
   "worker": {
     "strictBash": true,
     "scopeViolationPolicy": "fail",
@@ -11,9 +10,9 @@
     "budgetUsd": 10,
     "mergeStrategy": "branch",
     "verify": {
-      "worker": null,
-      "integrationLight": null,
-      "full": null
+      "worker": [],
+      "integrationLight": [],
+      "full": []
     }
   }
 }

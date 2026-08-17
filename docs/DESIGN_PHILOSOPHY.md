@@ -7,7 +7,7 @@
 ## One-line thesis
 
 **Keep the runtime minimal and mature; make Claude (or any coding agent) the
-configuration and extension interface via readable docs, schemas, and plugins.**
+configuration and extension interface via readable docs and optional plugins.**
 
 ```
 User → Agent (reads docs, understands capabilities, generates config/plugins)
@@ -68,8 +68,7 @@ can reconfigure mid-conversation, this design wins.
 
 ### Versus other Pi multi-agent patterns
 
-Pi already supports subagents / RPC workers. Pi-swarm is not “more agents for
-their own sake.” It adds:
+Pi ships RPC workers and an extension API; it does **not** bake in subagents. This package fills that gap with one opinionated coding pipeline. It is not “more agents for their own sake.” It adds:
 
 - complexity gating (simple tasks bounce back to the main session)
 - plan review before spend
@@ -87,9 +86,9 @@ documented; let agents compose them.
 | **Config** | Declarative behavior | Generate / edit `.pi/swarm.json`; validate with `/swarm validate` |
 | **Wizard + templates** | Fast path to sane presets | `/swarm config` wizard; copy `docs/examples/configs/*` |
 | **Guards** | Per-worker tools & policy | Custom extensions via `safetyGuardPath` |
-| **Plugins** | Replace verification / scheduling / collaboration strategies | Paths in `run.*Strategy` fields |
+| **Plugins** | Optional: narrow worker verify commands, concurrency width | Paths in `run.*Strategy` fields; collaboration tools are not injected |
 | **Observability** | Close the feedback loop | `/swarm analyze` → config recommendations |
-| **Cases** | Implicit learning | Past plans influence future planning |
+| **Cases** | Optional history | Past plans can inform planning; rate them with `/swarm cases rate` |
 
 ## Feasibility verdict (from the original discussion)
 
@@ -97,8 +96,7 @@ The vision is **feasible and strategically aligned with Pi**:
 
 - Agents are already good at reading technical docs and emitting JSON / TypeScript.
 - The runtime already exposes a large config surface and custom guards.
-- Remaining work is mainly **making extension points real and documented**, not
-  inventing a new architecture.
+- Remaining work is keeping docs identical to the runtime, not inventing a new architecture.
 
 Priority order that follows from the philosophy:
 

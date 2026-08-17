@@ -6,7 +6,7 @@ import { RunStore } from "./state.ts";
 import { WorkspaceManager } from "./workspace.ts";
 import { writeGuardExtension } from "./guard-template.ts";
 import { WorkerHandle, type WorkerHandleOptions } from "./worker.ts";
-import { detectVerificationCommands, verificationFailurePrompt, verifyCommands } from "./verifier.ts";
+import { resolveVerifyCommands, skippedVerification, verificationFailurePrompt, verifyCommands } from "./verifier.ts";
 import { validatePlan } from "./plan-validation.ts";
 import { buildReport } from "./reporter.ts";
 import { RepoLock } from "./repo-lock.ts";
@@ -14,7 +14,6 @@ import { processIdentityStatus, stopOwnedProcess } from "./process-identity.ts";
 import { MetricsCollector } from "./metrics.ts";
 import { loadConfiguredPlugins } from "./plugin-loader.ts";
 import type { DefaultPluginRegistry } from "./plugins/registry.ts";
-import type { VerificationStrategy } from "./plugins/interfaces.ts";
 
 export interface OrchestratorHooks {
   projectTrusted: boolean;
@@ -121,7 +120,7 @@ export class Orchestrator {
     this.run.partialSuccess = false;
     this.startedAt = this.run.createdAt;
     try {
-      this.plugins = await loadConfiguredPlugins(this.config);
+      this.plugins = await loadConfiguredPlugins(this.config, { repoRoot: this.run.cwd, runDir: this.run.runDir, runId: this.run.runId });
       await this.applySchedulingStrategy();
       if (this.run.git) {
         for (const runtime of Object.values(this.run.workers)) {
@@ -448,20 +447,37 @@ export class Orchestrator {
           : this.workerBrief(task);
         await this.runControlledPrompt(worker, runtime, prompt, "working");
       }
-      const commands = task.acceptance.commands.length
-        ? task.acceptance.commands
-        : this.config.run.verify.worker ?? await detectVerificationCommands(workspace.path, false);
+      const commands = await resolveVerifyCommands({
+        configured: this.config.run.verify.worker,
+        cwd: workspace.path,
+        full: false,
+        fallback: task.acceptance.commands,
+      });
       for (let attempt = runtime.retries; attempt <= this.config.worker.maxRetries; attempt++) {
         runtime.status = "verifying";
         runtime.currentAction = "running worker verification";
         const verification = await this.verifyControlled(task.id, commands, workspace.path, runtime);
         runtime.verification = verification;
-        if (verification.ok) break;
+        if (verification.ok || verification.skipped) break;
         if (verification.commands.some((command) => command.blocked)) throw new Error(`${task.id} 验证命令被安全策略拒绝: ${verification.commands.find((command) => command.blocked)?.stderr}`);
         if (attempt >= this.config.worker.maxRetries) throw new Error(`${task.id} 验证失败`);
         runtime.retries++;
+        const failed = verification.commands.find((command) => command.exitCode !== 0);
+        const strategy = this.plugins?.get("verification", "configured");
+        let prompt = verificationFailurePrompt(verification, runtime.retries, this.config.worker.maxRetries);
+        if (strategy?.classifyFailure && failed) {
+          const classified = await strategy.classifyFailure(task, {
+            exitCode: failed.exitCode,
+            stdout: failed.stdout,
+            stderr: failed.stderr,
+          }, runtime.retries);
+          if (!classified.shouldRetry) throw new Error(`${task.id} 验证失败（插件判定不再重试: ${classified.category}）`);
+          if (classified.retryWithModifications?.additionalContext) {
+            prompt += `\nAdditional context from verifier: ${classified.retryWithModifications.additionalContext}`;
+          }
+        }
         const worker = await ensureHandle();
-        await this.runControlledPrompt(worker, runtime, verificationFailurePrompt(verification, runtime.retries, this.config.worker.maxRetries), "fixing");
+        await this.runControlledPrompt(worker, runtime, prompt, "fixing");
       }
       if (!runtime.verification?.ok) throw new Error(`${task.id} 验证未通过`);
       await this.controlCheckpoint(runtime);
@@ -666,16 +682,23 @@ export class Orchestrator {
   private async verifyControlled(key: string, commands: string[], cwd: string, runtime?: WorkerRuntime): Promise<VerificationResult> {
     while (true) {
       await this.controlCheckpoint(runtime);
+      if (!commands.length) return skippedVerification();
       const controller = new AbortController();
       this.verificationControllers.set(key, controller);
       const started = Date.now();
       const strategy = this.plugins?.get("verification", "configured");
       const task = this.run.plan?.subtasks.find((item) => item.id === key || key.startsWith(item.id));
+      let selected = commands;
+      if (strategy?.selectCommands && task) {
+        const changes = await this.workspace.listUncommittedChanges(cwd);
+        const chosen = await strategy.selectCommands(task, cwd, changes);
+        if (chosen) selected = chosen;
+      }
       let result: VerificationResult;
-      if (strategy && task) {
-        result = await this.runVerificationStrategy(strategy, task, cwd, commands, controller.signal);
+      if (!selected.length) {
+        result = skippedVerification();
       } else {
-        result = await verifyCommands(commands, cwd, this.config.run.verifyTimeoutSec, {
+        result = await verifyCommands(selected, cwd, this.config.run.verifyTimeoutSec, {
           signal: controller.signal,
           allowedPrefixes: this.config.run.verifyAllowedPrefixes,
         });
@@ -689,35 +712,6 @@ export class Orchestrator {
       }
       return result;
     }
-  }
-
-  private async runVerificationStrategy(
-    strategy: VerificationStrategy,
-    task: Subtask,
-    cwd: string,
-    commands: string[],
-    signal: AbortSignal,
-  ): Promise<VerificationResult> {
-    let selected = commands;
-    if (strategy.selectCommands) {
-      const chosen = await strategy.selectCommands(task, cwd, { modified: [], added: [], deleted: [] });
-      if (chosen?.length) selected = chosen;
-    }
-    if (signal.aborted) {
-      return {
-        ok: false,
-        commands: selected.map((command) => ({
-          command,
-          exitCode: 1,
-          stdout: "",
-          stderr: "aborted",
-          durationMs: 0,
-          timedOut: false,
-          aborted: true,
-        })),
-      };
-    }
-    return strategy.verify(task, cwd, selected);
   }
 
   private async mergePrepared(item: PreparedWorker): Promise<void> {
@@ -783,11 +777,13 @@ export class Orchestrator {
     let operation = this.activeOperation();
     let target = operation?.candidateWorktree ?? this.run.git!.integrationWorktree;
     await this.prepareVerificationEnvironment(target, operation);
-    const commands = full
-      ? this.config.run.verify.full ?? await detectVerificationCommands(target, true)
-      : this.config.run.verify.integrationLight ?? await detectVerificationCommands(target, false);
+    const commands = await resolveVerifyCommands({
+      configured: full ? this.config.run.verify.full : this.config.run.verify.integrationLight,
+      cwd: target,
+      full,
+    });
     if (!commands.length) {
-      const result = { ok: true, commands: [] };
+      const result = skippedVerification();
       if (full) this.finalVerification = result;
       if (operation) {
         operation.verification = result;
@@ -1270,21 +1266,11 @@ export class Orchestrator {
         completedTasks: [...this.run.merged],
       });
       if (schedule.batches?.length) {
-        // Prefer larger suggested parallel width when still within configured max.
         const suggested = Math.max(...schedule.batches.map((batch) => batch.length), 1);
         this.effectiveConcurrency = Math.max(1, Math.min(this.config.worker.maxConcurrency, suggested));
       }
-      if (strategy.adjust) {
-        const adjustment = await strategy.adjust({
-          avgTaskDuration: 0,
-          conflictRate: this.run.merged.length ? this.run.conflicts.length / this.run.merged.length : 0,
-          budgetUtilization: this.config.run.budgetUsd > 0 ? this.run.totals.cost / this.config.run.budgetUsd : 0,
-          stalledWorkers: [],
-        });
-        if (typeof adjustment.newConcurrency === "number" && Number.isFinite(adjustment.newConcurrency)) {
-          this.effectiveConcurrency = Math.max(1, Math.min(8, Math.trunc(adjustment.newConcurrency)));
-        }
-      }
+      // `schedule().batches` is advisory width only. DAG order stays `dependsOn`.
+      // Do not call `adjust()` here: metrics are not yet available.
     } catch (error) {
       // Plugin failures must not abort the run; fall back to configured concurrency.
       this.effectiveConcurrency = this.config.worker.maxConcurrency;

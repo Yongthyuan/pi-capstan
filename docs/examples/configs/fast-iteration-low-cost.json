@@ -1,5 +1,4 @@
 {
-  "$schema": "../../schema/swarm-config.schema.json",
   "planner": {
     "maxSubtasks": 4,
     "budgetUsd": 0.5,

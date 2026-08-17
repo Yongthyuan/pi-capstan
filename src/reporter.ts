@@ -28,9 +28,15 @@ export function buildReport(run: SwarmRun, finalVerification?: VerificationResul
   lines.push("", "## 验证", "");
   for (const worker of workers) {
     const verification = worker.verification;
-    lines.push(`- ${worker.subtaskId}: ${verification?.ok ? "✓" : "✗"} ${verification?.commands.map((item) => `\`${item.command}\``).join(", ") || "无命令"}`);
+    const mark = verification?.skipped ? "跳过" : verification?.ok ? "✓" : "✗";
+    const detail = verification?.commands.map((item) => `\`${item.command}\``).join(", ") || "无命令";
+    lines.push(`- ${worker.subtaskId}: ${mark} ${detail}`);
   }
-  if (finalVerification) lines.push(`- 集成全量: ${finalVerification.ok ? "✓" : "✗"} ${finalVerification.commands.map((item) => `\`${item.command}\``).join(", ") || "无命令"}`);
+  if (finalVerification) {
+    const mark = finalVerification.skipped ? "跳过" : finalVerification.ok ? "✓" : "✗";
+    const detail = finalVerification.commands.map((item) => `\`${item.command}\``).join(", ") || "无命令";
+    lines.push(`- 集成全量: ${mark} ${detail}`);
+  }
   if (run.conflicts.length) {
     lines.push("", "## 冲突", "");
     for (const conflict of run.conflicts) lines.push(`- ${conflict.incomingSubtask}: ${conflict.files.join(", ")} · ${conflict.resolved ? "已仲裁" : "未解决"}`);

@@ -34,11 +34,11 @@ export function validateConfig(config: SwarmConfig): ValidationResult {
   }
 
   // Planner 验证
-  if (config.planner.maxSubtasks < 1 || config.planner.maxSubtasks > 50) {
+  if (config.planner.maxSubtasks < 2 || config.planner.maxSubtasks > 12) {
     issues.push({
       path: "planner.maxSubtasks",
       level: "warning",
-      message: `maxSubtasks (${config.planner.maxSubtasks}) 超出推荐范围 [1, 50]`,
+      message: `maxSubtasks (${config.planner.maxSubtasks}) 超出推荐范围 [2, 12]`,
       suggestion: "过大会导致规划复杂度失控，过小限制并行能力",
     });
   }
@@ -108,7 +108,34 @@ export function validateConfig(config: SwarmConfig): ValidationResult {
     });
   }
 
-  // Verification 验证
+  // Verification lanes: null = auto-detect, [] = skip, array = run
+  const verify = config.run.verify;
+  if (verify.worker === null && verify.integrationLight === null && verify.full === null) {
+    issues.push({
+      path: "run.verify",
+      level: "warning",
+      message: "全部验证通道为 null：集成验证将 auto-detect；探测不到命令则跳过（报告写「跳过」，不是已验证）",
+      suggestion: "高质量任务请显式设置 run.verify.full，或接受探测结果",
+    });
+  }
+  if (Array.isArray(verify.worker) && verify.worker.length === 0
+    && Array.isArray(verify.integrationLight) && verify.integrationLight.length === 0
+    && Array.isArray(verify.full) && verify.full.length === 0) {
+    issues.push({
+      path: "run.verify",
+      level: "info",
+      message: "全部验证通道为 []：显式跳过 worker 回退探测与集成验证",
+    });
+  }
+
+  if (config.run.verificationStrategy || config.run.schedulingStrategy || (config.run.collaborationPrimitives?.length ?? 0) > 0) {
+    issues.push({
+      path: "run.verificationStrategy",
+      level: "warning",
+      message: "插件路径已配置。验证插件会参与 worker 验收；调度插件只调节并发，不改 DAG；协作插件目前不会把工具注入 worker",
+      suggestion: "优先用 run.verify 与计划里的 acceptance.commands，不要把插件当主路径",
+    });
+  }
   if (config.run.verifyTimeoutSec < 30) {
     issues.push({
       path: "run.verifyTimeoutSec",

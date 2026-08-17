@@ -2,9 +2,9 @@
 
 [中文文档](./README.zh-CN.md)
 
-Pi Agent Swarm is a native multi-agent extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). A single `/swarm <task>` command takes a complex task through complexity gating, evidence-based decomposition, plan confirmation, parallel execution in Git worktrees, verification, merging, recovery, and report injection.
+**pi-agent-swarm** is a native multi-agent extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). It is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm) (item fan-out + mailbox coordinator). This package runs a **controlled coding pipeline**: complexity gating, evidence-based decomposition, human plan confirmation, Git worktree isolation, DAG scheduling with path ownership, verification, merging, recovery, and report injection.
 
-Current version: `0.7.0`. Positioning: a controlled beta for your own trusted repositories, not a security sandbox for untrusted code. Tested against Pi 0.84.1; required API capabilities are probed at load time. Pi `>=0.84.1` is accepted: 0.84.x loads as compatible, and newer releases load with an explicit warning instead of refusing to start.
+Current version: `0.8.0`. Positioning: a controlled beta for your own trusted repositories, not a security sandbox for untrusted code. Tested against Pi 0.84.1; required API capabilities are probed at load time. Pi `>=0.84.1` is accepted: 0.84.x loads as compatible, and newer releases load with an explicit warning instead of refusing to start.
 
 ## What it does
 
@@ -54,7 +54,7 @@ Then run `/reload` inside Pi, or restart Pi. Copying the whole directory also wo
 /swarm merge [runId] | clean | replay <runId>
 /swarm pr [runId]
 /swarm cases [rate <id> +1|-1 | delete <id>]
-/swarm config | status
+/swarm config | validate | analyze | status
 ```
 
 The main Pi model can also call the `swarm_delegate` tool, but it cannot bypass human plan confirmation.
@@ -67,9 +67,9 @@ The main Pi model can also call the `swarm_delegate` tool, but it cannot bypass 
 
 - **[docs/README.md](./docs/README.md)** - Start here: quick reference, common patterns, and how Claude should use swarm
 - **[docs/DESIGN_PHILOSOPHY.md](./docs/DESIGN_PHILOSOPHY.md)** - Agent-configurable Swarm design philosophy
-- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** - Complete reference for all 89 configuration options with examples
-- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** - Guide for extending swarm with custom tools, strategies, and templates
-- **[docs/PLUGINS.md](./docs/PLUGINS.md)** - Plugin API for verification, scheduling, and collaboration
+- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** - Contract for all 51 configuration leaf keys
+- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** - Guards (supported) and honest plugin limits
+- **[docs/PLUGINS.md](./docs/PLUGINS.md)** - Optional plugin API; not the main path
 
 These docs enable Claude to read, understand, and customize swarm behavior by generating appropriate configurations and extensions based on project needs.
 

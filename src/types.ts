@@ -238,6 +238,8 @@ export interface VerificationCommandResult {
 
 export interface VerificationResult {
   ok: boolean;
+  /** True when the lane resolved to zero commands (explicit skip or nothing to detect). */
+  skipped?: boolean;
   commands: VerificationCommandResult[];
 }
 

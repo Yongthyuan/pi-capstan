@@ -1,15 +1,12 @@
-# Pi-Swarm 插件系统
+# Pi Agent Swarm 插件系统
 
-插件系统允许你扩展 pi-swarm 的核心行为，无需修改源代码。
+> 插件是**可选表面**，不是主产品。主路径是计划 `acceptance.commands` + `run.verify`。
+>
+> 诚实限制：验证插件已接到 worker 验收（含真实 git porcelain diff 与 `classifyFailure`）；调度插件只调节并发宽度；协作插件会加载但**不会**把 `getTools()` 注入 worker。
 
 ## 核心理念
 
-**让 Claude 能够配置和扩展 Swarm**
-
-- Claude 阅读插件文档
-- Claude 理解插件 API
-- Claude 根据需求选择或编写插件
-- Claude 在 `.pi/swarm.json` 中配置插件
+配置优先于插件。需要插件时复制 `docs/examples/plugins/*.ts`，写成可 `import()` 的模块，再把**绝对路径**写入 `run.verificationStrategy` / `run.schedulingStrategy`。
 
 ## 插件类型
 
@@ -29,15 +26,15 @@ interface VerificationStrategy {
   description: string;
   version: string;
   
-  // 选择要运行的验证命令
+  // 选择要运行的验证命令（null = 用默认命令，[] = 跳过）
   selectCommands?(
     task: Subtask,
     worktreePath: string,
     changes: { modified: string[]; added: string[]; deleted: string[] }
   ): Promise<string[] | null>;
   
-  // 执行验证
-  verify(
+  // 运行时不会调用。选中的命令一律走 verifyCommands（语法门 + 前缀 allowlist）
+  verify?(
     task: Subtask,
     worktreePath: string,
     commands: string[]

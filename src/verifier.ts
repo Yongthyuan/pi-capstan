@@ -17,6 +17,7 @@ interface PreparedCommand {
 const SHELL_SYNTAX = /[;&|<>`\r\n]|\$\(|\$\{/;
 
 export async function verifyCommands(commands: string[], cwd: string, timeoutSec: number, options: VerificationOptions = {}): Promise<VerificationResult> {
+  if (commands.length === 0) return { ok: true, skipped: true, commands: [] };
   const results: VerificationCommandResult[] = [];
   const allowedPrefixes = options.allowedPrefixes ?? [];
   for (const command of commands) {
@@ -50,6 +51,28 @@ export function isStructurallySafeVerificationCommand(command: string): boolean 
   } catch {
     return false;
   }
+}
+
+/**
+ * Resolve commands for a verification lane.
+ * - non-empty `fallback` wins (worker acceptance commands)
+ * - `configured === []` means explicit skip
+ * - `configured === null` means auto-detect
+ * - non-empty `configured` runs as-is
+ */
+export async function resolveVerifyCommands(options: {
+  configured: string[] | null;
+  cwd: string;
+  full: boolean;
+  fallback?: string[];
+}): Promise<string[]> {
+  if (options.fallback && options.fallback.length > 0) return options.fallback;
+  if (Array.isArray(options.configured)) return options.configured;
+  return detectVerificationCommands(options.cwd, options.full);
+}
+
+export function skippedVerification(): VerificationResult {
+  return { ok: true, skipped: true, commands: [] };
 }
 
 export async function detectVerificationCommands(cwd: string, full: boolean): Promise<string[]> {

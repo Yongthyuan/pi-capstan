@@ -4,10 +4,12 @@
  * Only runs tests affected by the changed files, reducing verification time.
  *
  * How it works:
- * 1. Analyze dependency graph of the codebase
- * 2. Find modules affected by file changes
- * 3. Map affected modules to test files
- * 4. Run only those tests
+ * 1. Look at the worker's git porcelain changes (runtime supplies this)
+ * 2. Map changed files to colocated / importing tests
+ * 3. Return a narrower command list from selectCommands
+ *
+ * The runtime then runs those commands through verifyCommands (allowlist + shell:false).
+ * `verify()` is not called.
  *
  * Usage in .pi/swarm.json:
  * {
@@ -69,6 +71,9 @@ export default class IncrementalVerifier implements VerificationStrategy {
   }
 
   async verify(task: Subtask, worktreePath: string, commands: string[]): Promise<VerificationResult> {
+    // The runtime does not call verify(); it runs selected commands through verifyCommands.
+    // Kept so the example still type-checks against the interface.
+    if (!commands.length) return { ok: true, skipped: true, commands: [] };
     const results = [];
 
     for (const command of commands) {
@@ -78,7 +83,7 @@ export default class IncrementalVerifier implements VerificationStrategy {
       try {
         const { stdout, stderr } = await execFileAsync(cmd, args, {
           cwd: worktreePath,
-          timeout: task.acceptance.timeoutMs || 300000,
+          timeout: 300000,
           maxBuffer: 10 * 1024 * 1024,
         });
 

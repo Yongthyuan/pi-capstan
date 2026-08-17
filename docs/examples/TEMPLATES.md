@@ -316,6 +316,6 @@ After customizing a template:
 
 ## Next Steps
 
-- Read [CONFIGURATION.md](../CONFIGURATION.md) for all 89 configuration options
+- Read [CONFIGURATION.md](../CONFIGURATION.md) for all 51 configuration leaf keys
 - Read [FOR_CLAUDE.md](../FOR_CLAUDE.md) if you are Claude generating configs
 - Explore [extension examples](./extensions/) for custom tools and strategies

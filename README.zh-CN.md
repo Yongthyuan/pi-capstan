@@ -2,9 +2,9 @@
 
 [English](./README.md)
 
-Pi Agent Swarm 是一个面向 [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) 的原生多智能体扩展。它通过 `/swarm <task>` 完成复杂度门控、证据化拆解、计划确认、Git worktree 并行执行、验证、合并、恢复和报告回注。
+**pi-agent-swarm** 是面向 [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) 的原生多智能体扩展。它**不是** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm)（按 item 扇出 + mailbox coordinator）。本包装的是**受控编码流水线**：复杂度门控、证据化拆解、计划确认、Git worktree 隔离、带路径所有权的 DAG、验证、合并、恢复和报告回注。
 
-当前版本为 `0.7.0`，定位是可受控自用的 beta，而不是不可信代码的安全沙箱。已验证版本是 Pi 0.84.1；加载时会探测必需的 API 能力。支持 Pi `>=0.84.1`：0.84.x 直接按兼容加载，更新的版本会带显式警告加载，而不是拒绝启动。
+当前版本为 `0.8.0`，定位是可受控自用的 beta，而不是不可信代码的安全沙箱。已验证版本是 Pi 0.84.1；加载时会探测必需的 API 能力。支持 Pi `>=0.84.1`：0.84.x 直接按兼容加载，更新的版本会带显式警告加载，而不是拒绝启动。
 
 ## 当前实现
 
@@ -54,7 +54,7 @@ ln -s /absolute/path/to/pi-swarm ~/.pi/agent/extensions/swarm
 /swarm merge [runId] | clean | replay <runId>
 /swarm pr [runId]
 /swarm cases [rate <id> +1|-1 | delete <id>]
-/swarm config | status
+/swarm config | validate | analyze | status
 ```
 
 Pi 主模型也可以调用 `swarm_delegate` 工具，但不会绕过人工计划确认。
@@ -67,9 +67,9 @@ Pi 主模型也可以调用 `swarm_delegate` 工具，但不会绕过人工计�
 
 - **[docs/README.md](./docs/README.md)** - 从这里开始：快速参考、常见模式和 Claude 使用指南
 - **[docs/DESIGN_PHILOSOPHY.md](./docs/DESIGN_PHILOSOPHY.md)** - Agent 可配置 Swarm 的设计哲学
-- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** - 全部 89 个配置项的完整参考和示例
-- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** - 扩展 swarm 的指南：自定义工具、策略和模板
-- **[docs/PLUGINS.md](./docs/PLUGINS.md)** - 验证 / 调度 / 协作插件 API
+- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** - 全部 51 个配置叶子键的契约
+- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** - 自定义 guard（支持）与插件的诚实边界
+- **[docs/PLUGINS.md](./docs/PLUGINS.md)** - 可选插件 API，不是主路径
 
 这些文档让 Claude 能够阅读、理解和定制 swarm 行为，根据项目需求生成合适的配置和扩展。
 

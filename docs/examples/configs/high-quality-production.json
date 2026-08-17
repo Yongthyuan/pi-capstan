@@ -1,5 +1,4 @@
 {
-  "$schema": "../../schema/swarm-config.schema.json",
   "worker": {
     "bestOfN": 3,
     "bestOfNJudge": true,

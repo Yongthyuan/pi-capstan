@@ -33,7 +33,8 @@ export class DefaultPluginRegistry implements PluginRegistry {
   async register(
     type: 'verification' | 'scheduling' | 'collaboration',
     name: string,
-    modulePath: string
+    modulePath: string,
+    init: Record<string, unknown> = {},
   ): Promise<void> {
     // Resolve and validate path
     const absolutePath = resolve(modulePath);
@@ -79,8 +80,8 @@ export class DefaultPluginRegistry implements PluginRegistry {
     // Type-specific validation
     if (type === 'verification') {
       const vStrategy = instance as VerificationStrategy;
-      if (typeof vStrategy.verify !== 'function') {
-        throw new Error(`Verification plugin must implement verify() method`);
+      if (typeof vStrategy.selectCommands !== 'function' && typeof vStrategy.classifyFailure !== 'function' && typeof vStrategy.verify !== 'function') {
+        throw new Error(`Verification plugin must implement selectCommands(), classifyFailure(), or verify()`);
       }
     } else if (type === 'scheduling') {
       const sStrategy = instance as SchedulingStrategy;
@@ -96,7 +97,7 @@ export class DefaultPluginRegistry implements PluginRegistry {
 
     // Initialize if provided
     if (instance.initialize) {
-      await instance.initialize({});
+      await instance.initialize(init);
     }
 
     // Register

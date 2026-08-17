@@ -38,7 +38,7 @@ export function generateConfigFromAnswers(answers: WizardAnswers): Partial<Swarm
       config.worker = {
         strictBash: true,
         scopeViolationPolicy: "fail",
-        tools: ["read", "grep", "find", "ls", "swarm_send", "swarm_inbox"],
+        tools: ["read", "edit", "write", "grep", "find", "ls", "swarm_send", "swarm_inbox", "swarm_fs"],
         maxRetries: 1,
       };
       config.run = { budgetUsd: answers.maxBudget ?? 10, mergeStrategy: "branch" };
@@ -63,19 +63,16 @@ export function generateConfigFromAnswers(answers: WizardAnswers): Partial<Swarm
   }
 
   if (answers.verification === "minimal") {
-    run.verify = { worker: null, integrationLight: null, full: null };
+    run.verify = { worker: [], integrationLight: [], full: [] };
   } else if (answers.verification === "standard") {
-    run.verify = {
-      worker: ["npm run typecheck", "npm test -- --passWithNoTests"],
-      integrationLight: null,
-      full: null,
-    };
+    run.verify = { worker: null, integrationLight: null, full: [] };
   } else if (answers.verification === "comprehensive") {
-    run.verify = {
-      worker: ["npm run typecheck", "npm test -- --passWithNoTests"],
-      integrationLight: ["npm run lint"],
-      full: ["npm test -- --coverage"],
-    };
+    run.verify = { worker: null, integrationLight: null, full: null };
+  }
+
+  if (answers.useCase === "untrusted-code") {
+    // Never auto-detect and run the target repo's own test scripts.
+    run.verify = { worker: [], integrationLight: [], full: [] };
   }
 
   return config as Partial<SwarmConfig>;
