@@ -2,139 +2,113 @@
 
 > **Many hands. One winch. Total control.**
 
-[中文文档](./README.zh-CN.md)
+[![CI](https://github.com/Yongthyuan/pi-capstan/actions/workflows/ci.yml/badge.svg)](https://github.com/Yongthyuan/pi-capstan/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-58A6FF.svg)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522.19-3FB950.svg)](./package.json)
+[![Pi](https://img.shields.io/badge/Pi-%E2%89%A50.84.1-8957E5.svg)](https://github.com/badlogic/pi-mono)
 
-**Capstan** (formerly **pi-agent-swarm**) is a native multi-agent swarm extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) that runs plan-gated parallel subagents through a **controlled coding pipeline**: complexity gating, evidence-based decomposition, human plan confirmation, Git worktree isolation, DAG scheduling with path ownership, two-level verification, merging, recovery, and report injection. It is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm) (item fan-out + mailbox coordinator).
+**Capstan runs several AI coding agents on your repository at the same time — without letting go of the wheel.** Plans are reviewed before money is spent, every worker is isolated in its own Git worktree, costs are hard-capped, and only verified results get merged. It is a [Pi](https://github.com/badlogic/pi-mono) extension, formerly released as *pi-agent-swarm*.
 
-Current version: `0.9.0`. Positioning: a controlled beta for your own trusted repositories, not a security sandbox for untrusted code. Tested against Pi 0.84.1; required API capabilities are probed at load time. Pi `>=0.84.1` is accepted: 0.84.x loads as compatible, and newer releases load with an explicit warning instead of refusing to start.
+<!-- Drop a demo recording at docs/assets/demo.gif, then uncomment:
+<p align="center"><img src="docs/assets/demo.gif" alt="Capstan: plan → approve → parallel workers → verified merge" width="720"></p>
+-->
 
-## What it does
+## The problem
 
-- Two-tier complexity gating with `--force` / `--solo` / `--plan-only`
-- Hybrid planner scout that reads tracked/untracked files, manifests, symbol/test structure, import neighborhoods, and test/source adjacency
-- Strict SwarmPlan validation: DAG, topological mergeOrder, contracts, and path ownership
-- Native `pi --mode rpc` workers with JSONL transport, usage accounting, steer/abort, and batched UI approval forwarding
-- Worker extension isolation: `--no-extensions` plus explicit safety and scope guards
-- Repo-level cross-process lease, PID launch-identity check, heartbeat-based orphan worker reclaim, and idempotent `/swarm resume`
-- Git worktrees, shared dependency directories with trusted setup, temporary dirty baselines, last-green candidate merging, conflict arbitration, and an integration fixer
-- Slot pipeline scheduling with dependency-aware partial success; a failed task does not swallow independent green results
-- Precise rollback on scope violations by default; explicit channels for lockfile/shared/generated paths
-- Worker mailbox, lead coordination requests, mid-run `/swarm replan`, and scoped `swarm_fs`
-- Optional `--best-of N` same-task candidate competition; a read-only reviewer picks before the candidate enters the verification track
-- Two-level verification (worker and integration); verification commands run with `shell:false`, a syntax gate, and a prefix allowlist
-- Unified control barrier for pause, persistent budgets, single-worker detach, and kill; active tools do not count toward stall, and true silence gets one steer before failing
-- Dashboard, widget, report renderer, run entries, case store, and log replay
-- Default `branch` landing; `apply` is only allowed on a clean, non-drifted main worktree
+One coding agent is slow. Five coding agents are chaos: they edit the same files, run your test suite over each other, spend tokens nobody counted, and land half-reviewed changes straight onto your branch.
 
-## Install
+Capstan's answer is a pipeline, not a free-for-all:
 
-**One step (recommended):**
+```text
+/swarm "add OAuth login, write tests, update the README"
+   │
+   ├─ 1. GATE      trivial request? it runs solo — no swarm, no extra cost
+   ├─ 2. PLAN      a planner reads your repo and proposes a task DAG
+   ├─ 3. CONFIRM   you review the plan (tasks, order, acceptance checks) — nothing spent yet
+   ├─ 4. BUILD     up to 8 workers, each in its own Git worktree, owning its own files
+   ├─ 5. VERIFY    worker output and the merged tree must pass allowlisted checks
+   └─ 6. LAND      last-green results merge to an integration branch; PR when you say so
+```
+
+## Quick start
 
 ```bash
 pi install npm:pi-capstan
 ```
 
-Then restart Pi (or `/reload`). That is the only required step — **zero configuration needed**: safe defaults are always on (branch-first merging, dollar and token budgets, plan confirmation, scope-violation revert, verification gates). Tune later with `/swarm config` if you want; most runs never need it.
-
-**From source (development):**
-
-```bash
-git clone https://github.com/Yongthyuan/pi-capstan && cd pi-capstan && npm ci
-pi --no-extensions -e /absolute/path/to/pi-capstan/index.ts
-```
-
-User-level auto-discovery also works via a symlink to `~/.pi/agent/extensions/swarm`. The extension entry point is `index.ts`.
-
-## Usage
+Restart Pi, then just talk to it:
 
 ```text
 /swarm "implement the OAuth backend, the login page, tests, and docs"
-/swarm "task" --force --max 4 --budget 8 --model provider/model
-/swarm "high-risk task" --force --best-of 2
-/swarm "task" --plan-only
-/swarm board
-/swarm pause | resume [runId] | abort
-/swarm replan
-/swarm merge [runId] | clean | replay <runId>
-/swarm pr [runId]
-/swarm cases [rate <id> +1|-1 | delete <id>]
-/swarm config | validate | analyze | status
 ```
 
-The main Pi model can also call the `swarm_delegate` tool, but it cannot bypass human plan confirmation.
+You will see the plan first. Approve it and watch the workers fan out on the dashboard; decline it and nothing was spent. **Zero configuration required** — safe defaults ship enabled. When you want to tune concurrency, budgets, or verification, run `/swarm config`; most people never do.
 
-`/swarm pr [runId]` asks for confirmation again, then pushes only the last-green integration branch and creates a PR through the GitHub CLI; local RPC logs, sessions, and report bodies never end up in the PR. Remote CI is still governed by the target repository's own rules.
+## What you get
+
+- **Nothing runs without your yes.** Every swarm produces a reviewable plan and waits. Declining costs nothing.
+- **Workers never collide.** Each task works in its own Git worktree with declared file ownership. Out-of-scope edits are reverted precisely — the rest of the work survives.
+- **Costs are capped, twice.** Per-worker and whole-run dollar and token budgets stop runaway turns instead of surprising your invoice.
+- **Green means green.** Results pass two verification levels (per-task and integrated) using allowlisted commands before anything lands.
+- **Failure stays local.** A broken task doesn't sink independent ones; a crashed session resumes where it left off; orphaned workers get reclaimed.
+- **Small tasks stay cheap.** Complexity gating routes simple requests to solo mode instead of paying for a swarm. Disagree? `--force`.
+
+## Capstan vs. delegation tools
+
+Pi's ecosystem has great *delegation* extensions — a parent agent asking child agents to think, review, or research. Capstan is for the other job: **many agents editing your repository in parallel, safely.**
+
+| | Delegation-style subagents | Capstan |
+|---|---|---|
+| Best at | thinking, reviewing, answering | building — parallel repo edits |
+| Isolation | shared workspace, varies | per-task Git worktrees, enforced |
+| Cost | usually uncounted | hard budgets, live accounting |
+| Landing | whatever the model did | verified, branch-first merge you control |
+
+> Note: this is **not** [`@gjczone/pi-swarm`](https://www.npmjs.com/package/@gjczone/pi-swarm) (item fan-out + mailbox coordinator). Different tool, different philosophy.
+
+## Commands
+
+```text
+/swarm "task"                      start a swarm (add --force --max 4 --best-of 2 --plan-only as needed)
+/swarm board                       live dashboard
+/swarm pause | resume | abort      control the running swarm
+/swarm replan                      add work mid-run
+/swarm merge | clean | replay      land or clean up finished runs
+/swarm pr [runId]                  push the integration branch and open a PR
+/swarm cases                       browse/rate past runs (improves future planning)
+/swarm config | validate | status  configure, lint config, inspect state
+```
+
+The main Pi model can also call the `swarm_delegate` tool — it still cannot bypass plan confirmation.
+
+## Safety defaults (always on)
+
+Branch-first landing (never auto-applies to your checkout) · plan confirmation gate · dollar + token budgets at worker and run level · scope-violation revert · two-level verification with a command prefix allowlist · worker extension isolation · credential redaction in logs and the case store · atomic state with recovery.
+
+Git worktrees give you **concurrency isolation, not an OS sandbox**. For genuinely hostile code, use a container — this tool prevents accidents, not attacks.
 
 ## Documentation
 
-**For Claude and developers**: Comprehensive documentation is available in the [`docs/`](./docs/) directory:
+- **[docs/README.md](./docs/README.md)** — start here: quick reference and patterns
+- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** — all 51 configuration keys (when you outgrow the defaults)
+- **[docs/DESIGN_PHILOSOPHY.md](./docs/DESIGN_PHILOSOPHY.md)** — why it's built this way
+- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** · **[docs/PLUGINS.md](./docs/PLUGINS.md)** — guards and plugins
+- **[docs/examples/](./docs/examples/)** — copy-paste configs and plugin examples
 
-- **[docs/README.md](./docs/README.md)** - Start here: quick reference, common patterns, and how Claude should use swarm
-- **[docs/DESIGN_PHILOSOPHY.md](./docs/DESIGN_PHILOSOPHY.md)** - Agent-configurable Swarm design philosophy
-- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** - Contract for all 51 configuration leaf keys
-- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** - Guards (supported) and honest plugin limits
-- **[docs/PLUGINS.md](./docs/PLUGINS.md)** - Optional plugin API; not the main path
-
-These docs enable Claude to read, understand, and customize swarm behavior by generating appropriate configurations and extensions based on project needs.
-
-Use `/swarm config` (wizard), `/swarm validate`, and `/swarm analyze` to generate, check, and improve project configs from inside Pi.
-
-## Configuration
-
-Merge order: built-in defaults → `~/.pi/agent/swarm.json` → `<repo>/.pi/swarm.json` → command-line flags.
-
-See [docs/CONFIGURATION.md](./docs/CONFIGURATION.md) for complete details and common configuration patterns.
-
-Safety defaults:
-
-- `mergeStrategy: "branch"`
-- `caseStore.enabled: true`; writes only to the user's local agent directory and redacts common credentials
-- `failurePolicy: "continue-independent"`
-- `worker.shareDependencyDirs: ["node_modules"]`; symlinks on POSIX, junctions on Windows
-- `worker.setupCommands: []`; runs only in trusted projects, constrained by a separate allowlist and timeout
-- `worker.scopeViolationPolicy: "revert"`; out-of-scope paths do not consume the whole task result
-- `worker.strictBash: false`; opting in appends denylist patterns that block inline interpreter code (`python -c`, `node -e`, shell `-c`, `find -exec/-delete`) at the cost of also blocking some legitimate one-liners
-- Default budgets: planner `$1/160K tokens`, worker `$2/250K`, run `$8/1M`
-- Workers load only the explicitly listed tool and guard extensions
-- The planner can only pick verification commands from `run.verifyAllowedPrefixes`; pipes, redirects, command substitution, and multi-line commands are rejected
-- Planner and workers all have call timeouts plus token and dollar budgets; planner usage counts toward the run total
-- A budget overrun first interrupts the current model turn, then lets the user choose between raising the budget and stopping the run
-- `--best-of N` increases model cost linearly; the default stays `1`
-- Results from a dirty baseline are never auto-applied
-- RPC logs strip prompts, command bodies, and common credentials by default; logs/sessions are retained for 14/30 days respectively
-- State uses atomic writes with a `state.prev.json` fallback; corrupted state raises an explicit warning at session start
-
-Run `/swarm config` inside Pi to write a project config.
-
-## Testing
+## Development
 
 ```bash
-npm install
-npm run check
-npm test
-npm run test:native
-npm run test:soak [iterations] [name-pattern]
+npm ci
+npm run check        # types + syntax
+npm test             # 58 tests
+npm run test:native  # real Pi RPC smoke
 ```
 
-`test:native` uses a temporary `PI_CODING_AGENT_DIR` to simulate `~/.pi/agent/extensions/swarm/` auto-discovery and verifies `/swarm` registration, the guard, mailbox/safe file tool loading, and command handling over the Pi RPC protocol; it never touches the real `~/.pi`. `test:soak` repeats the suite to surface timing flakes that a single green run hides. CI runs a Linux and Windows matrix on every push and a daily cross-platform soak.
-
-Optional canaries against a real, already-authenticated model:
-
-```bash
-PI_SWARM_TEST_MODEL=provider/model npm run test:native:plan
-PI_SWARM_TEST_MODEL=provider/model npm run test:native:model
-PI_SWARM_TEST_MODEL=provider/model npm run test:native:e2e
-```
-
-The first two verify the real planner and a real worker; `test:native:e2e` drives the native `/swarm` command through plan confirmation, two real workers, candidate verification, integration advancement, and report status. The tests clean up their temporary repositories, but Pi may refresh its own short-lived auth lock files.
-
-## Safety boundary
-
-Git worktrees provide concurrency isolation, not an OS security sandbox. The scope guard, bash denylist, extension isolation, safe verification executor, and pre-merge diff checks are there to prevent accidents, but your project's own test scripts still execute code. For malicious repositories, scripts, or prompts you must use a separate container or OS sandbox with isolated network and credentials.
+CI runs Linux + Windows on every push, with a daily cross-platform soak.
 
 ## Why "Capstan"
 
-A capstan turns one person's pull into tons of controlled force, and its pawl means the load never slips back. That is the whole thesis: many hands (parallel workers), one winch (the orchestrator), total control (gates, budgets, plan confirmation, reversible merges).
+A capstan turns one person's pull into tons of controlled force — and its pawl means the load never slips back. Many hands (parallel workers), one winch (the orchestrator), total control (gates, budgets, plan confirmation, reversible merges).
 
 ## License
 

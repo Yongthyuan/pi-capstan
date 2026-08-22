@@ -3,139 +3,115 @@
 > **Many hands. One winch. Total control.**
 > 绞盘：一人摇柄，众人推杆，千斤锚分节离底，棘爪落下绝不倒滑。
 
+[![CI](https://github.com/Yongthyuan/pi-capstan/actions/workflows/ci.yml/badge.svg)](https://github.com/Yongthyuan/pi-capstan/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-58A6FF.svg)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522.19-3FB950.svg)](./package.json)
+[![Pi](https://img.shields.io/badge/Pi-%E2%89%A50.84.1-8957E5.svg)](https://github.com/badlogic/pi-mono)
+
 [English](./README.md)
 
-**Capstan**（原名 **pi-agent-swarm**）是面向 [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) 的原生多智能体 swarm 扩展：以计划确认为门的并行子智能体（subagents），经**受控编码流水线**执行——复杂度门控、证据化拆解、Git worktree 隔离、带路径所有权的 DAG 调度、两级验证、合并、恢复和报告回注。它**不是** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm)（按 item 扇出 + mailbox coordinator）。
+**Capstan 让多个 AI 编码智能体同时在你的仓库上干活——而方向盘始终在你手里。** 开工前先给你审计划，每个 worker 隔离在独立的 Git worktree 里，花费有硬性上限，只有通过验证的结果才会被合并。它是 [Pi](https://github.com/badlogic/pi-mono) 的扩展，曾用名 *pi-agent-swarm*。
 
-当前版本为 `0.9.0`，定位是可受控自用的 beta，而不是不可信代码的安全沙箱。已验证版本是 Pi 0.84.1；加载时会探测必需的 API 能力。支持 Pi `>=0.84.1`：0.84.x 直接按兼容加载，更新的版本会带显式警告加载，而不是拒绝启动。
+<!-- 录好演示动图后放到 docs/assets/demo.gif，然后取消注释：
+<p align="center"><img src="docs/assets/demo.gif" alt="Capstan: 计划 → 确认 → 并行 worker → 验证合并" width="720"></p>
+-->
 
-## 当前实现
+## 问题所在
 
-- 两层复杂度门控与 `--force` / `--solo` / `--plan-only`
-- 读取 tracked/untracked 文件、manifest、符号/测试结构、import 邻域和 test/source 邻域的混合 planner scout
-- 严格 SwarmPlan 校验：DAG、拓扑 mergeOrder、契约和路径所有权
-- 原生 `pi --mode rpc` worker、JSONL、usage、steer/abort、批量 UI 审批转发
-- worker 扩展隔离：`--no-extensions`，显式 safety guard + scope guard
-- 仓库级跨进程 lease、PID 启动身份校验、心跳式孤儿 worker 回收和幂等 `/swarm resume`
-- Git worktree、共享依赖目录与可信 setup、临时 dirty baseline、last-green candidate 合并、冲突仲裁和集成 fixer
-- slot 流水调度、依赖感知的部分成功；失败任务不会吞掉无依赖的绿色结果
-- scope 越界默认精确回滚，lockfile/shared/generated path 有显式通道
-- worker mailbox、lead 协调请求、运行中 `/swarm replan` 和作用域内 `swarm_fs`
-- 可选 `--best-of N` 同题候选竞争，只读 reviewer 选择后再进入 candidate 验证轨道
-- worker/集成两级验证；验证命令使用 `shell:false`、语法门和前缀 allowlist
-- pause、持久化预算、单 worker detach、kill 使用统一控制屏障；活动工具不计入 stall，真正静默时先 steer 一次再失败
-- dashboard、widget、报告 renderer、运行 entry、案例库和日志回放
-- 默认 `branch` 落地；仅干净且未漂移的主工作区允许 `apply`
+一个 agent 干活慢；五个 agent 一起干是灾难：改同一批文件、互相踩测试、token 花了多少没人知道，半成品直接落到你的分支上。
 
-## 安装
+Capstan 的答案是流水线，而不是放羊：
 
-**一步到位（推荐）：**
+```text
+/swarm "实现 OAuth 服务端、登录页、测试和文档"
+   │
+   ├─ 1. 门控      琐碎请求？直接单线程跑——不开群，不多花钱
+   ├─ 2. 计划      planner 读取仓库，提出任务 DAG
+   ├─ 3. 确认      你审计划（任务、顺序、验收标准）——此时一分钱没花
+   ├─ 4. 建造      最多 8 个 worker，各自拥有独立 Git worktree 和文件所有权
+   ├─ 5. 验证      worker 产出和合并结果都要通过白名单命令的检查
+   └─ 6. 落地      last-green 结果合并到集成分支；你说了算才发 PR
+```
+
+## 快速开始
 
 ```bash
 pi install npm:pi-capstan
 ```
 
-然后重启 Pi（或执行 `/reload`）。这是唯一必需的步骤——**零配置即可用**：安全默认值始终开启（branch 优先落地、美元与 token 双预算、计划确认门、越界自动回滚、验证门控）。想调优时再运行 `/swarm config`，大多数 run 完全不需要。
-
-**从源码（开发模式）：**
-
-```bash
-git clone https://github.com/Yongthyuan/pi-capstan && cd pi-capstan && npm ci
-pi --no-extensions -e /absolute/path/to/pi-capstan/index.ts
-```
-
-也可以通过软链接到 `~/.pi/agent/extensions/swarm` 实现用户级自动发现。扩展根入口是 `index.ts`。
-
-## 使用
+重启 Pi，然后正常说话：
 
 ```text
-/swarm "实现 OAuth 服务端、前端登录页、测试和文档"
-/swarm "任务" --force --max 4 --budget 8 --model provider/model
-/swarm "高风险任务" --force --best-of 2
-/swarm "任务" --plan-only
-/swarm board
-/swarm pause | resume [runId] | abort
-/swarm replan
-/swarm merge [runId] | clean | replay <runId>
-/swarm pr [runId]
-/swarm cases [rate <id> +1|-1 | delete <id>]
-/swarm config | validate | analyze | status
+/swarm "实现 OAuth 服务端、登录页、测试和文档"
 ```
 
-Pi 主模型也可以调用 `swarm_delegate` 工具，但不会绕过人工计划确认。
+你会先看到计划。批准它，看 worker 在 dashboard 上铺开；拒绝它，一分钱不花。**零配置即可用**——安全默认值始终开启。想调并发、预算或验证时再运行 `/swarm config`；大多数人从来不需要。
 
-`/swarm pr [runId]` 会再次确认，然后只推送 last-green integration branch 并通过 GitHub CLI 创建 PR；本地 RPC 日志、session 和 report 正文不会被放进 PR。远端 CI 仍由目标仓库自己的规则决定。
+## 你能得到什么
+
+- **没有你的同意，什么都不开工。** 每个 swarm 先产出可审阅的计划并等待确认；拒绝零成本。
+- **worker 永不打架。** 每个任务在自己的 Git worktree 里工作，文件所有权明确声明；越界改动被精确回滚——其余成果原样保留。
+- **花费双重封顶。** worker 级和 run 级的美元与 token 预算会拦住失控回合，而不是给你的账单制造惊喜。
+- **绿色就是真绿。** 结果要过两级验证（任务级 + 集成级），验证命令只允许白名单前缀。
+- **失败只影响局部。** 一个任务挂了不会拖垮独立任务；崩溃的会话从断点恢复；孤儿 worker 会被回收。
+- **小事保持便宜。** 复杂度门控把简单请求路由到单线程模式，不为琐事开群。不服？`--force`。
+
+## Capstan 与委派类工具的区别
+
+Pi 生态里有优秀的*委派*扩展——父 agent 请子 agent 思考、审查、调研。Capstan 解决的是另一件事：**多个 agent 安全地并行修改你的仓库。**
+
+| | 委派式 subagents | Capstan |
+|---|---|---|
+| 擅长 | 思考、审查、答疑 | 建造——并行改代码 |
+| 隔离 | 共享工作区，因工具而异 | 每任务独立 worktree，强制执行 |
+| 成本 | 通常无人统计 | 硬预算 + 实时记账 |
+| 落地 | 模型做了什么就是什么 | 验证后 branch 优先合并，由你掌控 |
+
+> 注意：这不是 [`@gjczone/pi-swarm`](https://www.npmjs.com/package/@gjczone/pi-swarm)（按 item 扇出 + mailbox coordinator）。不同的工具，不同的哲学。
+
+## 命令
+
+```text
+/swarm "任务"                      启动 swarm（可加 --force --max 4 --best-of 2 --plan-only）
+/swarm board                       实时看板
+/swarm pause | resume | abort      控制运行中的 swarm
+/swarm replan                       运行中追加任务
+/swarm merge | clean | replay      落地或清理已结束的 run
+/swarm pr [runId]                  推送集成分支并创建 PR
+/swarm cases                       浏览/评分历史 run（改进未来规划）
+/swarm config | validate | status  配置、检查配置、查看状态
+```
+
+Pi 主模型也可以调用 `swarm_delegate` 工具——但依然绕不过计划确认门。
+
+## 安全默认值（始终开启）
+
+Branch 优先落地（绝不自动 apply 到主工作区） · 计划确认门 · worker 与 run 双级美元/token 预算 · 越界自动回滚 · 两级验证 + 命令前缀白名单 · worker 扩展隔离 · 日志与案例库凭据脱敏 · 原子状态写入与断点恢复。
+
+Git worktree 提供的是**并发隔离，不是操作系统沙箱**。面对真正的恶意代码请用容器——本工具防误操作，不防攻击。
 
 ## 文档
 
-**给 Claude 和开发者**：完整的文档位于 [`docs/`](./docs/) 目录：
+- **[docs/README.md](./docs/README.md)** — 从这里开始：快速参考与常见模式
+- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** — 全部 51 个配置键（等你超出默认需求再看）
+- **[docs/DESIGN_PHILOSOPHY.md](./docs/DESIGN_PHILOSOPHY.md)** — 为什么这样设计
+- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** · **[docs/PLUGINS.md](./docs/PLUGINS.md)** — guard 与插件
+- **[docs/examples/](./docs/examples/)** — 可直接复制的配置和插件示例
 
-- **[docs/README.md](./docs/README.md)** - 从这里开始：快速参考、常见模式和 Claude 使用指南
-- **[docs/DESIGN_PHILOSOPHY.md](./docs/DESIGN_PHILOSOPHY.md)** - Agent 可配置 Swarm 的设计哲学
-- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** - 全部 51 个配置叶子键的契约
-- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** - 自定义 guard（支持）与插件的诚实边界
-- **[docs/PLUGINS.md](./docs/PLUGINS.md)** - 可选插件 API，不是主路径
-
-这些文档让 Claude 能够阅读、理解和定制 swarm 行为，根据项目需求生成合适的配置和扩展。
-
-在 Pi 内可用 `/swarm config`（向导）、`/swarm validate`、`/swarm analyze` 生成、校验并改进项目配置。
-
-## 配置
-
-合并顺序：内置默认值 → `~/.pi/agent/swarm.json` → `<repo>/.pi/swarm.json` → 命令行 flags。
-
-完整细节和常见配置模式请参考 [docs/CONFIGURATION.md](./docs/CONFIGURATION.md)。
-
-安全默认值：
-
-- `mergeStrategy: "branch"`
-- `caseStore.enabled: true`，仅写入用户本机 agent 目录，并对常见凭据做脱敏
-- `failurePolicy: "continue-independent"`
-- `worker.shareDependencyDirs: ["node_modules"]`；POSIX 使用 symlink，Windows 使用 junction
-- `worker.setupCommands: []`；仅受信任项目可执行，且受独立 allowlist 与超时约束
-- `worker.scopeViolationPolicy: "revert"`；越界路径不会消耗整个任务成果
-- `worker.strictBash: false`；可选开启后追加拦截内联解释器代码（`python -c`、`node -e`、shell `-c`、`find -exec/-delete`），代价是部分合法单行命令也会被拦截
-- 默认预算为 planner `$1/160K tokens`、worker `$2/250K`、run `$8/1M`
-- worker 仅加载明确列出的工具和守卫扩展
-- planner 只能选择 `run.verifyAllowedPrefixes` 中的验证命令；管道、重定向、命令替换和多行命令会被拒绝
-- planner 和 worker 都有调用超时、token 与美元预算；planner 使用量计入 run 总量
-- 预算越界先中断当前模型回合，再由用户选择扩容或停止整个 run
-- `--best-of N` 会线性增加模型成本，默认仍为 `1`
-- dirty baseline 的结果永不自动 apply
-- RPC 日志默认去除 prompt、命令正文和常见凭据；logs/session 默认分别保留 14/30 天
-- state 使用原子写入和 `state.prev.json` 回退；损坏状态会在 session 启动时显式告警
-
-可在 Pi 中运行 `/swarm config` 写项目配置。
-
-## 测试
+## 开发
 
 ```bash
-npm install
-npm run check
-npm test
-npm run test:native
-npm run test:soak [次数] [name-pattern]
+npm ci
+npm run check        # 类型 + 语法
+npm test             # 58 个测试
+npm run test:native  # 真实 Pi RPC 冒烟
 ```
 
-`test:native` 使用临时 `PI_CODING_AGENT_DIR`，模拟 `~/.pi/agent/extensions/swarm/` 自动发现，并通过 Pi RPC 验证 `/swarm` 注册、guard、mailbox/安全文件工具的加载和命令处理；不会修改真实的 `~/.pi`。`test:soak` 会重复运行整个套件，暴露单次 green 掩盖的时序波动。CI 在每次 push 时运行 Linux 与 Windows 矩阵，并每日跨平台 soak。
-
-使用已经认证的真实模型运行可选 canary：
-
-```bash
-PI_SWARM_TEST_MODEL=provider/model npm run test:native:plan
-PI_SWARM_TEST_MODEL=provider/model npm run test:native:model
-PI_SWARM_TEST_MODEL=provider/model npm run test:native:e2e
-```
-
-前两个命令分别验证真实 planner 和真实 worker；`test:native:e2e` 从原生 `/swarm` 命令贯通计划确认、两个真实 worker、候选验证、推进 integration 和报告状态。测试都会清理临时仓库，但 Pi 可能更新自身的短时认证锁文件。
-
-## 安全边界
-
-Git worktree 是并发隔离，不是操作系统安全沙箱。scope guard、bash denylist、扩展隔离、安全验证执行器和合并前 diff 检查用于防误操作，但项目测试脚本本身仍会执行代码。对恶意仓库、脚本或提示词必须使用独立容器或 OS 沙箱，并隔离网络和凭据。
+CI 在每次 push 时跑 Linux + Windows 矩阵，另有每日跨平台 soak。
 
 ## 为什么叫 Capstan
 
-绞盘能把一个人的拉力放大成数吨的可控力量，而棘爪保证载荷永不倒滑。这正是本项目的全部论点：多只手（并行 worker），一个绞盘（编排器），完全可控（门控、预算、计划确认、可回退合并）。
+绞盘能把一个人的拉力放大成数吨的可控力量，而棘爪保证载荷永不倒滑。多只手（并行 worker），一个绞盘（编排器），完全可控（门控、预算、计划确认、可回退合并）。
 
 ## 许可证
 
