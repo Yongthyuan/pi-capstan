@@ -28,20 +28,22 @@ Current version: `0.9.0`. Positioning: a controlled beta for your own trusted re
 
 ## Install
 
-Load directly during development:
+**One step (recommended):**
 
 ```bash
-npm ci
-pi --no-extensions -e /absolute/path/to/capstan/index.ts
+pi install npm:pi-capstan
 ```
 
-User-level auto-discovery:
+Then restart Pi (or `/reload`). That is the only required step — **zero configuration needed**: safe defaults are always on (branch-first merging, dollar and token budgets, plan confirmation, scope-violation revert, verification gates). Tune later with `/swarm config` if you want; most runs never need it.
+
+**From source (development):**
 
 ```bash
-ln -s /absolute/path/to/capstan ~/.pi/agent/extensions/swarm
+git clone https://github.com/Yongthyuan/pi-capstan && cd pi-capstan && npm ci
+pi --no-extensions -e /absolute/path/to/pi-capstan/index.ts
 ```
 
-Then run `/reload` inside Pi, or restart Pi. Copying the whole directory also works; the extension entry point is `index.ts`.
+User-level auto-discovery also works via a symlink to `~/.pi/agent/extensions/swarm`. The extension entry point is `index.ts`.
 
 ## Usage
 

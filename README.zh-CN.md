@@ -29,20 +29,22 @@
 
 ## 安装
 
-开发时直接加载：
+**一步到位（推荐）：**
 
 ```bash
-npm ci
-pi --no-extensions -e /absolute/path/to/capstan/index.ts
+pi install npm:pi-capstan
 ```
 
-用户级自动发现：
+然后重启 Pi（或执行 `/reload`）。这是唯一必需的步骤——**零配置即可用**：安全默认值始终开启（branch 优先落地、美元与 token 双预算、计划确认门、越界自动回滚、验证门控）。想调优时再运行 `/swarm config`，大多数 run 完全不需要。
+
+**从源码（开发模式）：**
 
 ```bash
-ln -s /absolute/path/to/capstan ~/.pi/agent/extensions/swarm
+git clone https://github.com/Yongthyuan/pi-capstan && cd pi-capstan && npm ci
+pi --no-extensions -e /absolute/path/to/pi-capstan/index.ts
 ```
 
-然后在 Pi 中执行 `/reload`，或重新启动 Pi。也可以复制整个目录，扩展根入口是 `index.ts`。
+也可以通过软链接到 `~/.pi/agent/extensions/swarm` 实现用户级自动发现。扩展根入口是 `index.ts`。
 
 ## 使用
 
