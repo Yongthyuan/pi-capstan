@@ -1,4 +1,4 @@
-# Pi-Swarm Design Philosophy
+# Capstan Design Philosophy
 
 > Distilled from the architecture / product discussion that framed the
 > “Agent-configurable Swarm” roadmap. This is the north star for what we build
@@ -11,7 +11,7 @@ configuration and extension interface via readable docs and optional plugins.**
 
 ```
 User → Agent (reads docs, understands capabilities, generates config/plugins)
-         → Pi-Swarm (executes with native Pi + Git primitives)
+         → Capstan (executes with native Pi + Git primitives)
          ↑______________ feedback (/swarm analyze, cases) ______________|
 ```
 
@@ -55,7 +55,7 @@ as a **node inside a developer-authored workflow**. Strengths: production
 orchestration patterns, schemas, checkpoints. Cost: shared state coordination,
 heavy infra, and customization that usually means writing more framework code.
 
-Pi-swarm’s bet is different:
+Capstan’s bet is different:
 
 - Isolation and history come from **Git**, not a checkpoint store.
 - Scheduling is an explicit **DAG + path ownership**, not prompt-only roles.

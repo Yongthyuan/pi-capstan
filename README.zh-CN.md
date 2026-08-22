@@ -1,10 +1,13 @@
-# Pi Agent Swarm
+# Capstan
+
+> **Many hands. One winch. Total control.**
+> 绞盘：一人摇柄，众人推杆，千斤锚分节离底，棘爪落下绝不倒滑。
 
 [English](./README.md)
 
-**pi-agent-swarm** 是面向 [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) 的原生多智能体扩展。它**不是** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm)（按 item 扇出 + mailbox coordinator）。本包装的是**受控编码流水线**：复杂度门控、证据化拆解、计划确认、Git worktree 隔离、带路径所有权的 DAG、验证、合并、恢复和报告回注。
+**Capstan**（原名 **pi-agent-swarm**）是面向 [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) 的原生多智能体 swarm 扩展：以计划确认为门的并行子智能体（subagents），经**受控编码流水线**执行——复杂度门控、证据化拆解、Git worktree 隔离、带路径所有权的 DAG 调度、两级验证、合并、恢复和报告回注。它**不是** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm)（按 item 扇出 + mailbox coordinator）。
 
-当前版本为 `0.8.0`，定位是可受控自用的 beta，而不是不可信代码的安全沙箱。已验证版本是 Pi 0.84.1；加载时会探测必需的 API 能力。支持 Pi `>=0.84.1`：0.84.x 直接按兼容加载，更新的版本会带显式警告加载，而不是拒绝启动。
+当前版本为 `0.9.0`，定位是可受控自用的 beta，而不是不可信代码的安全沙箱。已验证版本是 Pi 0.84.1；加载时会探测必需的 API 能力。支持 Pi `>=0.84.1`：0.84.x 直接按兼容加载，更新的版本会带显式警告加载，而不是拒绝启动。
 
 ## 当前实现
 
@@ -30,13 +33,13 @@
 
 ```bash
 npm ci
-pi --no-extensions -e /absolute/path/to/pi-swarm/index.ts
+pi --no-extensions -e /absolute/path/to/capstan/index.ts
 ```
 
 用户级自动发现：
 
 ```bash
-ln -s /absolute/path/to/pi-swarm ~/.pi/agent/extensions/swarm
+ln -s /absolute/path/to/capstan ~/.pi/agent/extensions/swarm
 ```
 
 然后在 Pi 中执行 `/reload`，或重新启动 Pi。也可以复制整个目录，扩展根入口是 `index.ts`。
@@ -127,6 +130,10 @@ PI_SWARM_TEST_MODEL=provider/model npm run test:native:e2e
 ## 安全边界
 
 Git worktree 是并发隔离，不是操作系统安全沙箱。scope guard、bash denylist、扩展隔离、安全验证执行器和合并前 diff 检查用于防误操作，但项目测试脚本本身仍会执行代码。对恶意仓库、脚本或提示词必须使用独立容器或 OS 沙箱，并隔离网络和凭据。
+
+## 为什么叫 Capstan
+
+绞盘能把一个人的拉力放大成数吨的可控力量，而棘爪保证载荷永不倒滑。这正是本项目的全部论点：多只手（并行 worker），一个绞盘（编排器），完全可控（门控、预算、计划确认、可回退合并）。
 
 ## 许可证
 

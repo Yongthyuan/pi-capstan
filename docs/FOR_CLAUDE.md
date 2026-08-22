@@ -1,6 +1,6 @@
-# FOR_CLAUDE.md — how to configure Pi Agent Swarm
+# FOR_CLAUDE.md — how to configure Capstan
 
-You are configuring **pi-agent-swarm**, a Pi extension for **controlled parallel coding**.
+You are configuring **Capstan** (formerly **pi-agent-swarm**), a Pi extension for **controlled parallel coding**.
 
 This is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm). That package fans items out with a Swarm tool. This package: gate → human-confirmed DAG plan → worktree workers → verify → merge.
 

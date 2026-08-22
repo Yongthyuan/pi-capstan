@@ -1,9 +1,21 @@
 {
-  "name": "pi-agent-swarm",
-  "version": "0.8.0",
+  "name": "pi-capstan",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
-  "description": "Native multi-agent swarm extension for pi-coding-agent",
+  "description": "Controlled multi-agent swarm pipeline for pi-coding-agent: plan-gated parallel subagents, Git-worktree isolation, DAG scheduling with path ownership, budgets, verification, merge, recovery.",
+  "keywords": [
+    "pi",
+    "pi-coding-agent",
+    "multi-agent",
+    "swarm",
+    "subagents",
+    "ai-agents",
+    "llm",
+    "orchestration",
+    "git-worktree",
+    "coding-agent"
+  ],
   "scripts": {
     "test": "node --test test/*.test.ts",
     "test:ci": "node --test --experimental-test-isolation=none --test-force-exit test/*.test.ts",

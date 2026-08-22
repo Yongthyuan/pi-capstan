@@ -1,4 +1,4 @@
-# Pi Agent Swarm Configuration Reference
+# Capstan Configuration Reference
 
 > **For Claude**: This is the contract. There are **51** configurable leaf keys (not 89). There is **no** JSON Schema file. Project files must be pure JSON. Read [FOR_CLAUDE.md](./FOR_CLAUDE.md) first.
 

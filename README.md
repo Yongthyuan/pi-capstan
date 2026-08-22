@@ -1,10 +1,12 @@
-# Pi Agent Swarm
+# Capstan
+
+> **Many hands. One winch. Total control.**
 
 [中文文档](./README.zh-CN.md)
 
-**pi-agent-swarm** is a native multi-agent extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). It is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm) (item fan-out + mailbox coordinator). This package runs a **controlled coding pipeline**: complexity gating, evidence-based decomposition, human plan confirmation, Git worktree isolation, DAG scheduling with path ownership, verification, merging, recovery, and report injection.
+**Capstan** (formerly **pi-agent-swarm**) is a native multi-agent swarm extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) that runs plan-gated parallel subagents through a **controlled coding pipeline**: complexity gating, evidence-based decomposition, human plan confirmation, Git worktree isolation, DAG scheduling with path ownership, two-level verification, merging, recovery, and report injection. It is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm) (item fan-out + mailbox coordinator).
 
-Current version: `0.8.0`. Positioning: a controlled beta for your own trusted repositories, not a security sandbox for untrusted code. Tested against Pi 0.84.1; required API capabilities are probed at load time. Pi `>=0.84.1` is accepted: 0.84.x loads as compatible, and newer releases load with an explicit warning instead of refusing to start.
+Current version: `0.9.0`. Positioning: a controlled beta for your own trusted repositories, not a security sandbox for untrusted code. Tested against Pi 0.84.1; required API capabilities are probed at load time. Pi `>=0.84.1` is accepted: 0.84.x loads as compatible, and newer releases load with an explicit warning instead of refusing to start.
 
 ## What it does
 
@@ -30,13 +32,13 @@ Load directly during development:
 
 ```bash
 npm ci
-pi --no-extensions -e /absolute/path/to/pi-swarm/index.ts
+pi --no-extensions -e /absolute/path/to/capstan/index.ts
 ```
 
 User-level auto-discovery:
 
 ```bash
-ln -s /absolute/path/to/pi-swarm ~/.pi/agent/extensions/swarm
+ln -s /absolute/path/to/capstan ~/.pi/agent/extensions/swarm
 ```
 
 Then run `/reload` inside Pi, or restart Pi. Copying the whole directory also works; the extension entry point is `index.ts`.
@@ -127,6 +129,10 @@ The first two verify the real planner and a real worker; `test:native:e2e` drive
 ## Safety boundary
 
 Git worktrees provide concurrency isolation, not an OS security sandbox. The scope guard, bash denylist, extension isolation, safe verification executor, and pre-merge diff checks are there to prevent accidents, but your project's own test scripts still execute code. For malicious repositories, scripts, or prompts you must use a separate container or OS sandbox with isolated network and credentials.
+
+## Why "Capstan"
+
+A capstan turns one person's pull into tons of controlled force, and its pawl means the load never slips back. That is the whole thesis: many hands (parallel workers), one winch (the orchestrator), total control (gates, budgets, plan confirmation, reversible merges).
 
 ## License
 

@@ -1,4 +1,4 @@
-# Pi Agent Swarm 插件系统
+# Capstan 插件系统
 
 > 插件是**可选表面**，不是主产品。主路径是计划 `acceptance.commands` + `run.verify`。
 >
@@ -188,7 +188,7 @@ interface CollaborationPrimitive {
 
 ```typescript
 // ~/.pi/agent/plugins/my-plugin.ts
-import type { VerificationStrategy, Subtask, VerificationResult } from 'pi-agent-swarm';
+import type { VerificationStrategy, Subtask, VerificationResult } from 'pi-capstan';
 
 export default class MyVerifier implements VerificationStrategy {
   readonly name = 'my-verifier';

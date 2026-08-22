@@ -7,3 +7,4 @@ dist/
 
 # Local design notes are intentionally excluded from the published repository.
 pi-swarm-构建计划.md
+.claude/

@@ -1,4 +1,4 @@
-# Pi Agent Swarm Extension Points
+# Capstan Extension Points
 
 > **For Claude**: Prefer [CONFIGURATION.md](./CONFIGURATION.md). Custom **guards** are the supported extension. Plugin strategies exist but are optional and partially wired — do not generate them unless the user asks.
 
@@ -72,7 +72,7 @@ export default function(pi: ExtensionAPI) {
 }
 ```
 
-**Step 2: Configure Pi-Swarm to Load It**
+**Step 2: Configure Capstan to Load It**
 
 ```json
 {

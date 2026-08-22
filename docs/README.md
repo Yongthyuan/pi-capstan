@@ -1,19 +1,19 @@
-# Pi Agent Swarm Documentation Index
+# Capstan Documentation Index
 
 > **For Claude**: Read [FOR_CLAUDE.md](./FOR_CLAUDE.md) first for a complete guide on how to use these docs to generate configurations and customize swarm behavior.
 
 ## Quick Links
 
 - **[FOR_CLAUDE.md](./FOR_CLAUDE.md)** - Complete guide for Claude: how to read docs and generate configurations
-- **[DESIGN_PHILOSOPHY.md](./DESIGN_PHILOSOPHY.md)** - Why pi-swarm is agent-configurable and Pi-aligned
+- **[DESIGN_PHILOSOPHY.md](./DESIGN_PHILOSOPHY.md)** - Why Capstan is agent-configurable and Pi-aligned
 - **[examples/](./examples/)** - Ready-to-use configuration templates and extension examples
 - **[CONFIGURATION.md](./CONFIGURATION.md)** - Contract for all **51** configuration leaf keys
 - **[EXTENSION_POINTS.md](./EXTENSION_POINTS.md)** - Guards (supported) and honest plugin limits
 - **[PLUGINS.md](./PLUGINS.md)** - Optional plugin API; not the main path
 
-## What is Pi Agent Swarm?
+## What is Capstan?
 
-**pi-agent-swarm** is a native multi-agent extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). It is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm). It orchestrates decomposable same-repo coding tasks by:
+**Capstan** (formerly **pi-agent-swarm**) is a native multi-agent swarm extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). It is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm). It orchestrates decomposable same-repo coding tasks by:
 
 1. **Complexity Gating** - Simple tasks bounce back to the main session
 2. **Evidence-Based Planning** - Reads your codebase and generates a DAG plan
@@ -25,7 +25,7 @@
 
 ## Core Design Philosophy
 
-Pi-swarm follows Pi's minimalist philosophy:
+Capstan follows Pi's minimalist philosophy:
 
 - **Leverage native capabilities** - Git worktrees, Pi RPC, native extensions
 - **Zero external dependencies** - No databases, queues, or services
