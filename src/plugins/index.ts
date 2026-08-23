@@ -1,5 +1,5 @@
 /**
- * Pi-Swarm Plugin System Exports
+ * Pi-Capstan Plugin System Exports
  *
  * These types are exported for plugin authors to implement custom strategies.
  */

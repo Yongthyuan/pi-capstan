@@ -23,7 +23,7 @@
 Capstan 的答案是流水线，而不是放羊：
 
 ```text
-/swarm "实现 OAuth 服务端、登录页、测试和文档"
+/capstan "实现 OAuth 服务端、登录页、测试和文档"
    │
    ├─ 1. 门控      琐碎请求？直接单线程跑——不开群，不多花钱
    ├─ 2. 计划      planner 读取仓库，提出任务 DAG
@@ -42,14 +42,14 @@ pi install npm:pi-capstan
 重启 Pi，然后正常说话：
 
 ```text
-/swarm "实现 OAuth 服务端、登录页、测试和文档"
+/capstan "实现 OAuth 服务端、登录页、测试和文档"
 ```
 
-你会先看到计划。批准它，看 worker 在 dashboard 上铺开；拒绝它，一分钱不花。**零配置即可用**——安全默认值始终开启。想调并发、预算或验证时再运行 `/swarm config`；大多数人从来不需要。
+你会先看到计划。批准它，看 worker 在 dashboard 上铺开；拒绝它，一分钱不花。**零配置即可用**——安全默认值始终开启。想调并发、预算或验证时再运行 `/capstan config`；大多数人从来不需要。
 
 ## 你能得到什么
 
-- **没有你的同意，什么都不开工。** 每个 swarm 先产出可审阅的计划并等待确认；拒绝零成本。
+- **没有你的同意，什么都不开工。** 每个 capstan 先产出可审阅的计划并等待确认；拒绝零成本。
 - **worker 永不打架。** 每个任务在自己的 Git worktree 里工作，文件所有权明确声明；越界改动被精确回滚——其余成果原样保留。
 - **花费双重封顶。** worker 级和 run 级的美元与 token 预算会拦住失控回合，而不是给你的账单制造惊喜。
 - **绿色就是真绿。** 结果要过两级验证（任务级 + 集成级），验证命令只允许白名单前缀。
@@ -67,28 +67,26 @@ Pi 生态里有优秀的*委派*扩展——父 agent 请子 agent 思考、审�
 | 成本 | 通常无人统计 | 硬预算 + 实时记账 |
 | 落地 | 模型做了什么就是什么 | 验证后 branch 优先合并，由你掌控 |
 
-> 注意：这不是 [`@gjczone/pi-swarm`](https://www.npmjs.com/package/@gjczone/pi-swarm)（按 item 扇出 + mailbox coordinator）。不同的工具，不同的哲学。
-
 ## 命令
 
 ```text
-/swarm "任务"                      启动 swarm（可加 --force --max 4 --best-of 2 --plan-only）
-/swarm board                       实时看板
-/swarm pause | resume | abort      控制运行中的 swarm
-/swarm replan                       运行中追加任务
-/swarm merge | clean | replay      落地或清理已结束的 run
-/swarm pr [runId]                  推送集成分支并创建 PR
-/swarm cases                       浏览/评分历史 run（改进未来规划）
-/swarm config | validate | status  配置、检查配置、查看状态
+/capstan "任务"                      启动 capstan（可加 --force --max 4 --best-of 2 --plan-only）
+/capstan board                       实时看板
+/capstan pause | resume | abort      控制运行中的 capstan
+/capstan replan                       运行中追加任务
+/capstan merge | clean | replay      落地或清理已结束的 run
+/capstan pr [runId]                  推送集成分支并创建 PR
+/capstan cases                       浏览/评分历史 run（改进未来规划）
+/capstan config | validate | status  配置、检查配置、查看状态
 ```
 
-Pi 主模型也可以调用 `swarm_delegate` 工具——但依然绕不过计划确认门。
+程序化委派同样是一等公民：Pi 主模型可以调用 `capstan_delegate` 工具，它走的和其他一切一样的计划确认门。
 
 ## 安全默认值（始终开启）
 
 Branch 优先落地（绝不自动 apply 到主工作区） · 计划确认门 · worker 与 run 双级美元/token 预算 · 越界自动回滚 · 两级验证 + 命令前缀白名单 · worker 扩展隔离 · 日志与案例库凭据脱敏 · 原子状态写入与断点恢复。
 
-Git worktree 提供的是**并发隔离，不是操作系统沙箱**。面对真正的恶意代码请用容器——本工具防误操作，不防攻击。
+Git worktree 隔离的是并发冲突，而不是恶意代码。信任你的仓库，这套默认值就足够兜底；不信任？请把 Capstan 关进容器里运行。
 
 ## 文档
 
@@ -103,7 +101,7 @@ Git worktree 提供的是**并发隔离，不是操作系统沙箱**。面对真
 ```bash
 npm ci
 npm run check        # 类型 + 语法
-npm test             # 58 个测试
+npm test             # 单元测试
 npm run test:native  # 真实 Pi RPC 冒烟
 ```
 

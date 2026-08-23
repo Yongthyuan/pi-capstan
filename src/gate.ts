@@ -1,4 +1,4 @@
-import type { GateResult, SwarmConfig } from "./types.ts";
+import type { GateResult, CapstanConfig } from "./types.ts";
 
 export interface GateModel {
   classify(task: string, repoSummary: string, ruleHits: string[]): Promise<{ complexity: number; parallelizable: boolean; reason: string; estSubtasks: number }>;
@@ -27,7 +27,7 @@ export async function decideGate(
   task: string,
   fileCount: number,
   repoSummary: string,
-  config: SwarmConfig["gate"],
+  config: CapstanConfig["gate"],
   model?: GateModel,
 ): Promise<GateResult> {
   const rules = ruleGate(task, fileCount);

@@ -7,11 +7,11 @@ This is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm)
 ## Your job
 
 1. Read this file and [CONFIGURATION.md](./CONFIGURATION.md).
-2. Copy a template from [examples/configs/](./examples/configs/) into `<repo>/.pi/swarm.json`.
-3. Ask the user to run `/swarm validate`, then `/swarm "task"`.
+2. Copy a template from [examples/configs/](./examples/configs/) into `<repo>/.pi/capstan.json`.
+3. Ask the user to run `/capstan validate`, then `/capstan "task"`.
 4. Do **not** invent flags, keys, or plugins. Do **not** skip plan confirmation.
 
-`swarm_delegate` still requires the user to confirm the plan.
+`capstan_delegate` still requires the user to confirm the plan.
 
 ## Forbidden (these do not exist)
 
@@ -20,17 +20,17 @@ This is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm)
 - `run.customVerifiers`, `run.verificationConfig`, `worker.schedulerStrategy`, `planner.templates`
 - `run.verificationStrategy: "incremental"` (if used, it must be a **file path**, and it is optional)
 - JSON with `//` comments
-- `$schema` unless `docs/schema/swarm-config.schema.json` exists (it does not)
+- `$schema` unless `docs/schema/capstan-config.schema.json` exists (it does not)
 
 Unknown `--flags` are swallowed into the task text.
 
 ## Real commands
 
 ```text
-/swarm "task" [--force|-f] [--solo] [--plan-only|-n] [--max N] [--budget USD] [--best-of N] [--model provider/id]
-/swarm board|pause|resume [runId]|abort|merge [runId]|pr [runId]|replan|clean|replay [runId]
-/swarm cases [rate <caseId> +1|-1 | delete <caseId>]
-/swarm config | validate | analyze [--limit N] [--recommendations|--summary-only] | status | help
+/capstan "task" [--force|-f] [--solo] [--plan-only|-n] [--max N] [--budget USD] [--best-of N] [--model provider/id]
+/capstan board|pause|resume [runId]|abort|merge [runId]|pr [runId]|replan|clean|replay [runId]
+/capstan cases [rate <caseId> +1|-1 | delete <caseId>]
+/capstan config | validate | analyze [--limit N] [--recommendations|--summary-only] | status | help
 ```
 
 Flag mapping:
@@ -44,12 +44,12 @@ Flag mapping:
 
 | What | Where |
 |---|---|
-| Global config | `~/.pi/agent/swarm.json` |
-| Project config | `<repo>/.pi/swarm.json` |
-| Run state | `<repo>/.pi/swarm/runs/<runId>/state.json` |
-| Report | `<repo>/.pi/swarm/runs/<runId>/report.md` |
-| Cases | `~/.pi/agent/swarm/cases` |
-| Worktrees | `~/.pi/agent/swarm/worktrees` |
+| Global config | `~/.pi/agent/capstan.json` |
+| Project config | `<repo>/.pi/capstan.json` |
+| Run state | `<repo>/.pi/capstan/runs/<runId>/state.json` |
+| Report | `<repo>/.pi/capstan/runs/<runId>/report.md` |
+| Cases | `~/.pi/agent/capstan/cases` |
+| Worktrees | `~/.pi/agent/capstan/worktrees` |
 
 `safetyGuardPath` does **not** expand `~`. Use an absolute path.
 
@@ -73,7 +73,7 @@ Copy the JSON as-is (pure JSON). Then change only budget/concurrency if asked.
 
 For production-quality work, set an explicit `run.verify.full` array of allowlisted commands.
 
-## Plan contract (not swarm.json fields)
+## Plan contract (not capstan.json fields)
 
 - Same-wave `ownedPaths` ∪ `generatedPaths` must not overlap or the plan is rejected.
 - `sharedPaths` is for lockfiles / generated metadata, not feature code.
@@ -94,4 +94,4 @@ Prefer `run.verify` and plan `acceptance.commands`.
 
 ## After a run
 
-`/swarm analyze` suggests config changes. It does **not** write `swarm.json`. Apply changes only after the user agrees.
+`/capstan analyze` suggests config changes. It does **not** write `capstan.json`. Apply changes only after the user agrees.

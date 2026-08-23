@@ -1,11 +1,11 @@
 /**
- * Historical run analyzer — reads persisted SwarmRun state and emits trends /
+ * Historical run analyzer — reads persisted CapstanRun state and emits trends /
  * configuration recommendations for agents and humans.
  */
 
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SwarmRun, WorkerRuntime } from "./types.ts";
+import type { CapstanRun, WorkerRuntime } from "./types.ts";
 import { pathExists } from "./utils.ts";
 
 export interface RunSummary {
@@ -68,7 +68,7 @@ export class RunAnalyzer {
     for (const runId of runIds) {
       try {
         const raw = await readFile(join(this.runsRoot, runId, "state.json"), "utf8");
-        const run = JSON.parse(raw) as SwarmRun;
+        const run = JSON.parse(raw) as CapstanRun;
         summaries.push(summarizeRun(run));
       } catch {
         // skip corrupt runs
@@ -188,7 +188,7 @@ export class RunAnalyzer {
         severity: "high",
         title: "Low success rate",
         description: `Only ${(trends.overallSuccessRate * 100).toFixed(0)}% of recent runs succeed.`,
-        suggestedAction: "Use /swarm config wizard for a high-quality preset, or raise planner budget for better decompositions.",
+        suggestedAction: "Use /capstan config wizard for a high-quality preset, or raise planner budget for better decompositions.",
         expectedImpact: "More one-pass plans and fewer aborted runs.",
         configChanges: { planner: { budgetUsd: 2, maxSubtasks: 6 }, worker: { bestOfN: 2, bestOfNJudge: true } },
       });
@@ -210,7 +210,7 @@ export class RunAnalyzer {
 
   formatReport(summaries: RunSummary[], trends: TrendAnalysis, recommendations: OptimizationRecommendation[]): string {
     const lines = [
-      "# Swarm Analyze",
+      "# Capstan Analyze",
       "",
       `Runs analyzed: ${trends.totalRuns}`,
       `Success rate: ${(trends.overallSuccessRate * 100).toFixed(1)}% (${trends.successRateTrend})`,
@@ -262,7 +262,7 @@ export class RunAnalyzer {
   }
 }
 
-function summarizeRun(run: SwarmRun): RunSummary {
+function summarizeRun(run: CapstanRun): RunSummary {
   const workers = Object.values(run.workers ?? {}) as WorkerRuntime[];
   const done = workers.filter((worker) => worker.status === "done").length;
   const durationMs = Math.max(0, (run.updatedAt || run.createdAt) - run.createdAt);

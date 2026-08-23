@@ -1,9 +1,9 @@
-import type { SwarmRun, VerificationResult } from "./types.ts";
+import type { CapstanRun, VerificationResult } from "./types.ts";
 
-export function buildReport(run: SwarmRun, finalVerification?: VerificationResult, landingNote?: string): string {
+export function buildReport(run: CapstanRun, finalVerification?: VerificationResult, landingNote?: string): string {
   const workers = Object.values(run.workers);
   const lines = [
-    `# Swarm ${run.phase === "done" ? (run.partialSuccess ? "部分完成" : "完成") : "结束"} · ${run.plan?.taskSummary ?? run.task}`,
+    `# Capstan ${run.phase === "done" ? (run.partialSuccess ? "部分完成" : "完成") : "结束"} · ${run.plan?.taskSummary ?? run.task}`,
     "",
     `- runId: \`${run.runId}\``,
     `- 状态: ${run.phase}`,
@@ -47,7 +47,7 @@ export function buildReport(run: SwarmRun, finalVerification?: VerificationResul
     for (const note of notes) lines.push(`### ${note.id}`, "", note.report.slice(0, 2000), "");
   }
   if (run.error) lines.push("", "## 错误", "", run.error);
-  if (run.caseId) lines.push("", `反馈：\`/swarm cases rate ${run.caseId} +1|-1\``);
+  if (run.caseId) lines.push("", `反馈：\`/capstan cases rate ${run.caseId} +1|-1\``);
   return `${lines.join("\n")}\n`;
 }
 

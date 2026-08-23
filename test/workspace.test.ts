@@ -7,9 +7,9 @@ import { WorkspaceManager } from "../src/workspace.ts";
 import { runCommand } from "../src/utils.ts";
 
 test("workspace creates, commits and merges isolated task worktree", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-workspace-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-workspace-"));
   const repo = join(root, "repo");
-  const runDir = join(repo, ".pi", "swarm", "runs", "r1");
+  const runDir = join(repo, ".pi", "capstan", "runs", "r1");
   await mkdir(repo, { recursive: true });
   try {
     await writeFile(join(repo, "README.md"), "base\n");
@@ -41,7 +41,7 @@ test("workspace creates, commits and merges isolated task worktree", async () =>
 });
 
 test("dirty temporary baseline can execute but never auto-applies", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-dirty-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-dirty-"));
   const repo = join(root, "repo");
   await mkdir(repo, { recursive: true });
   try {
@@ -52,7 +52,7 @@ test("dirty temporary baseline can execute but never auto-applies", async () => 
     await git(repo, ["add", "README.md"]);
     await git(repo, ["commit", "-qm", "initial"]);
     await writeFile(join(repo, "README.md"), "base\nuser dirty\n");
-    const workspace = new WorkspaceManager({ cwd: repo, runId: "dirty", runDir: join(repo, ".pi", "swarm", "runs", "dirty"), worktreesRoot: join(root, "worktrees") });
+    const workspace = new WorkspaceManager({ cwd: repo, runId: "dirty", runDir: join(repo, ".pi", "capstan", "runs", "dirty"), worktreesRoot: join(root, "worktrees") });
     const state = await workspace.prepare(true);
     assert.equal(state.dirtyBase, true);
     assert.equal((await workspace.land("apply")).outcome, "branch");
@@ -63,7 +63,7 @@ test("dirty temporary baseline can execute but never auto-applies", async () => 
 });
 
 test("failed landing rolls the main worktree back and degrades to branch", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-land-rollback-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-land-rollback-"));
   const repo = join(root, "repo");
   await mkdir(repo, { recursive: true });
   try {
@@ -73,7 +73,7 @@ test("failed landing rolls the main worktree back and degrades to branch", async
     await git(repo, ["config", "user.name", "Test"]);
     await git(repo, ["add", "README.md"]);
     await git(repo, ["commit", "-qm", "initial"]);
-    const workspace = new WorkspaceManager({ cwd: repo, runId: "land-fail", runDir: join(repo, ".pi", "swarm", "runs", "land-fail"), worktreesRoot: join(root, "worktrees") });
+    const workspace = new WorkspaceManager({ cwd: repo, runId: "land-fail", runDir: join(repo, ".pi", "capstan", "runs", "land-fail"), worktreesRoot: join(root, "worktrees") });
     await workspace.prepare(false);
     const task: any = { id: "a", title: "a", ownedPaths: ["src/**"] };
     const child = await workspace.createTaskWorktree(task);
@@ -102,7 +102,7 @@ test("failed landing rolls the main worktree back and degrades to branch", async
 });
 
 test("worktrees safely share an existing dependency directory", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-dependencies-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-dependencies-"));
   const repo = join(root, "repo");
   await mkdir(repo, { recursive: true });
   try {
@@ -112,7 +112,7 @@ test("worktrees safely share an existing dependency directory", async () => {
     await git(repo, ["config", "user.name", "Test"]);
     await git(repo, ["add", "README.md"]);
     await git(repo, ["commit", "-qm", "initial"]);
-    const workspace = new WorkspaceManager({ cwd: repo, runId: "deps", runDir: join(repo, ".pi", "swarm", "runs", "deps"), worktreesRoot: join(root, "worktrees") });
+    const workspace = new WorkspaceManager({ cwd: repo, runId: "deps", runDir: join(repo, ".pi", "capstan", "runs", "deps"), worktreesRoot: join(root, "worktrees") });
     await workspace.prepare(false);
     await mkdir(join(repo, "node_modules"));
     await writeFile(join(repo, "node_modules", "marker"), "shared\n");
@@ -131,7 +131,7 @@ test("worktrees safely share an existing dependency directory", async () => {
 });
 
 test("scope cleanup reverts only out-of-scope paths and commits valid work", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-scope-revert-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-scope-revert-"));
   const repo = join(root, "repo");
   await mkdir(repo, { recursive: true });
   try {
@@ -141,7 +141,7 @@ test("scope cleanup reverts only out-of-scope paths and commits valid work", asy
     await git(repo, ["config", "user.name", "Test"]);
     await git(repo, ["add", "README.md"]);
     await git(repo, ["commit", "-qm", "initial"]);
-    const workspace = new WorkspaceManager({ cwd: repo, runId: "scope", runDir: join(repo, ".pi", "swarm", "runs", "scope"), worktreesRoot: join(root, "worktrees") });
+    const workspace = new WorkspaceManager({ cwd: repo, runId: "scope", runDir: join(repo, ".pi", "capstan", "runs", "scope"), worktreesRoot: join(root, "worktrees") });
     await workspace.prepare(false);
     const task: any = { id: "a", title: "a", ownedPaths: ["src/**"] };
     const child = await workspace.createTaskWorktree(task);
@@ -160,8 +160,8 @@ test("scope cleanup reverts only out-of-scope paths and commits valid work", asy
   }
 });
 
-test("resume recreates missing worktrees from existing swarm branches", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-resume-tree-"));
+test("resume recreates missing worktrees from existing capstan branches", async () => {
+  const root = await mkdtemp(join(tmpdir(), "capstan-resume-tree-"));
   const repo = join(root, "repo");
   await mkdir(repo, { recursive: true });
   try {
@@ -171,7 +171,7 @@ test("resume recreates missing worktrees from existing swarm branches", async ()
     await git(repo, ["config", "user.name", "Test"]);
     await git(repo, ["add", "README.md"]);
     await git(repo, ["commit", "-qm", "initial"]);
-    const workspace = new WorkspaceManager({ cwd: repo, runId: "resume", runDir: join(repo, ".pi", "swarm", "runs", "resume"), worktreesRoot: join(root, "worktrees") });
+    const workspace = new WorkspaceManager({ cwd: repo, runId: "resume", runDir: join(repo, ".pi", "capstan", "runs", "resume"), worktreesRoot: join(root, "worktrees") });
     const state = await workspace.prepare(false);
     const task: any = { id: "a", title: "a", ownedPaths: ["src/**"] };
     const child = await workspace.createTaskWorktree(task);
@@ -189,7 +189,7 @@ test("resume recreates missing worktrees from existing swarm branches", async ()
 });
 
 test("discarded candidate never contaminates the last-green integration branch", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-candidate-fail-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-candidate-fail-"));
   const repo = join(root, "repo");
   await mkdir(repo, { recursive: true });
   try {
@@ -199,7 +199,7 @@ test("discarded candidate never contaminates the last-green integration branch",
     await git(repo, ["config", "user.name", "Test"]);
     await git(repo, ["add", "README.md"]);
     await git(repo, ["commit", "-qm", "initial"]);
-    const workspace = new WorkspaceManager({ cwd: repo, runId: "candidate-fail", runDir: join(repo, ".pi", "swarm", "runs", "candidate-fail"), worktreesRoot: join(root, "worktrees") });
+    const workspace = new WorkspaceManager({ cwd: repo, runId: "candidate-fail", runDir: join(repo, ".pi", "capstan", "runs", "candidate-fail"), worktreesRoot: join(root, "worktrees") });
     const state = await workspace.prepare(false);
     const before = await gitOutput(state.integrationWorktree, ["rev-parse", "HEAD"]);
     const task: any = { id: "a", title: "a", ownedPaths: ["src/**"] };
@@ -220,7 +220,7 @@ test("discarded candidate never contaminates the last-green integration branch",
 });
 
 test("recovery reconciles a candidate promoted just before state persistence", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-promote-reconcile-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-promote-reconcile-"));
   const repo = join(root, "repo");
   await mkdir(repo, { recursive: true });
   try {
@@ -230,7 +230,7 @@ test("recovery reconciles a candidate promoted just before state persistence", a
     await git(repo, ["config", "user.name", "Test"]);
     await git(repo, ["add", "README.md"]);
     await git(repo, ["commit", "-qm", "initial"]);
-    const workspace = new WorkspaceManager({ cwd: repo, runId: "reconcile", runDir: join(repo, ".pi", "swarm", "runs", "reconcile"), worktreesRoot: join(root, "worktrees") });
+    const workspace = new WorkspaceManager({ cwd: repo, runId: "reconcile", runDir: join(repo, ".pi", "capstan", "runs", "reconcile"), worktreesRoot: join(root, "worktrees") });
     await workspace.prepare(false);
     const task: any = { id: "a", title: "a", ownedPaths: ["src/**"] };
     const child = await workspace.createTaskWorktree(task);
@@ -254,7 +254,7 @@ test("recovery reconciles a candidate promoted just before state persistence", a
 });
 
 test("a persisted run branch can be applied after worktrees were cleaned", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-late-merge-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-late-merge-"));
   const repo = join(root, "repo");
   await mkdir(repo, { recursive: true });
   try {
@@ -264,7 +264,7 @@ test("a persisted run branch can be applied after worktrees were cleaned", async
     await git(repo, ["config", "user.name", "Test"]);
     await git(repo, ["add", "README.md"]);
     await git(repo, ["commit", "-qm", "initial"]);
-    const runDir = join(repo, ".pi", "swarm", "runs", "late");
+    const runDir = join(repo, ".pi", "capstan", "runs", "late");
     const first = new WorkspaceManager({ cwd: repo, runId: "late", runDir, worktreesRoot: join(root, "worktrees") });
     const state = await first.prepare(false);
     const task: any = { id: "a", title: "a", ownedPaths: ["src/**"] };

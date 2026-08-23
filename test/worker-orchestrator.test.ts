@@ -20,7 +20,7 @@ async function cleanupTempRoot(root: string): Promise<void> {
 }
 
 test("worker handle speaks strict JSONL RPC", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-worker-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-worker-"));
   try {
     const fake = await writeFakePi(root);
     const prompt = join(root, "prompt.md");
@@ -42,7 +42,7 @@ test("worker handle speaks strict JSONL RPC", async () => {
 });
 
 test("orchestrator completes two-worker branch-only vertical slice", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-orchestrator-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-orchestrator-"));
   const repo = join(root, "repo");
   await mkdir(repo, { recursive: true });
   try {
@@ -53,7 +53,7 @@ test("orchestrator completes two-worker branch-only vertical slice", async () =>
     await git(repo, ["config", "user.name", "Test"]);
     await git(repo, ["add", "README.md"]);
     await git(repo, ["commit", "-qm", "initial"]);
-    const runDir = join(repo, ".pi", "swarm", "runs", "r1");
+    const runDir = join(repo, ".pi", "capstan", "runs", "r1");
     const plan: any = {
       schemaVersion: 1, taskSummary: "fake parallel", strategy: "two workers", contracts: [],
       subtasks: [
@@ -67,7 +67,7 @@ test("orchestrator completes two-worker branch-only vertical slice", async () =>
     config.run.verify.full = [];
     config.run.verifyAllowedPrefixes = ["node -e"];
     config.worker.maxConcurrency = 2;
-    const store = new RunStore(join(repo, ".pi", "swarm", "runs"));
+    const store = new RunStore(join(repo, ".pi", "capstan", "runs"));
     let report = "";
     const orchestrator = new Orchestrator({
       run, config, store, agentDir: join(root, "agent"),
@@ -79,24 +79,27 @@ test("orchestrator completes two-worker branch-only vertical slice", async () =>
     assert.equal(run.phase, "done", run.error);
     assert.equal(run.outcome, "branch");
     assert.deepEqual(run.merged, ["a", "b"]);
-    assert.equal(report.includes("Swarm 完成"), true);
+    assert.equal(report.includes("Capstan 完成"), true);
   } finally {
     await cleanupTempRoot(root);
   }
 });
 
 test("pause is a real barrier and resumes interrupted worker turns", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-pause-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-pause-"));
   try {
-    const fixture = await makeOrchestratorFixture(root, "pause", 300);
+    const releaseFile = "pause-release";
+    const fixture = await makeOrchestratorFixture(root, "pause", 300, async () => "stop", { FAKE_PI_RELEASE_FILE: releaseFile });
     const execution = fixture.orchestrator.execute(false);
     // Creating two Git worktrees can exceed five seconds on a loaded Windows
-    // runner. Wait for the state transition rather than racing setup latency.
+    // runner. The fake workers stay active behind an explicit barrier so this
+    // assertion does not depend on observing a short overlap between turns.
     await waitFor(() => Object.values(fixture.run.workers).filter((worker: any) => worker.status === "working").length === 2, 20_000);
     await fixture.orchestrator.pause();
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.deepEqual(fixture.run.merged, []);
     assert.equal(Object.values(fixture.run.workers).every((worker: any) => worker.status === "paused"), true);
+    await writeFile(join(root, releaseFile), "release");
     await fixture.orchestrator.resume();
     await execution;
     assert.equal(fixture.run.phase, "done", fixture.run.error);
@@ -107,7 +110,7 @@ test("pause is a real barrier and resumes interrupted worker turns", async () =>
 });
 
 test("budget gate aborts the turn, asks once, and continues only after extension", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-budget-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-budget-"));
   try {
     let budgetPrompts = 0;
     const fixture = await makeOrchestratorFixture(root, "budget", 20, async () => {
@@ -128,7 +131,7 @@ test("budget gate aborts the turn, asks once, and continues only after extension
 });
 
 test("stall watchdog steers once then fails a persistently silent worker", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-stall-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-stall-"));
   try {
     const fixture = await makeOrchestratorFixture(root, "stall", 5_000);
     fixture.config.worker.stallSec = 0.05;
@@ -141,7 +144,7 @@ test("stall watchdog steers once then fails a persistently silent worker", async
 });
 
 test("stall watchdog exempts a long-running active tool", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-tool-stall-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-tool-stall-"));
   try {
     const fixture = await makeOrchestratorFixture(root, "tool-stall", 300, async () => "stop", { FAKE_PI_TOOL_ACTIVE: "1" });
     fixture.config.worker.stallSec = 0.05;
@@ -154,7 +157,7 @@ test("stall watchdog exempts a long-running active tool", async () => {
 });
 
 test("stall watchdog treats streaming thinking updates as activity", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-thinking-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-thinking-"));
   try {
     const fixture = await makeOrchestratorFixture(root, "thinking", 6_000, async () => "stop", { FAKE_PI_THINKING: "1" });
     // A silent worker still receives two watchdog checks and fails before the
@@ -170,12 +173,12 @@ test("stall watchdog treats streaming thinking updates as activity", async () =>
 });
 
 test("shared dependency setup commands never overlap across worktrees", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-setup-serial-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-setup-serial-"));
   try {
     const fixture = await makeOrchestratorFixture(root, "setup-serial", 20, async () => "stop", {}, undefined, true);
     await mkdir(join(fixture.repo, "node_modules"), { recursive: true });
     // Structural safety in verifyCommands rejects ; & | < > so the probe is one comma expression.
-    const lockScript = "(f=require('fs'),p='node_modules/.swarm-setup-lock',f.existsSync(p)?process.exit(1):(f.writeFileSync(p,'x'),setTimeout(function(){f.unlinkSync(p),process.exit(0)},400)))";
+    const lockScript = "(f=require('fs'),p='node_modules/.capstan-setup-lock',f.existsSync(p)?process.exit(1):(f.writeFileSync(p,'x'),setTimeout(function(){f.unlinkSync(p),process.exit(0)},400)))";
     fixture.config.worker.setupCommands = [`node -e "${lockScript}"`];
     fixture.config.run.setupAllowedPrefixes = ["node -e"];
     await fixture.orchestrator.execute(false);
@@ -187,7 +190,7 @@ test("shared dependency setup commands never overlap across worktrees", async ()
 });
 
 test("detach affects only one worker and a later orchestrator can resume it", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-detach-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-detach-"));
   try {
     const first = await makeOrchestratorFixture(root, "detach", 500);
     const execution = first.orchestrator.execute(false);
@@ -203,7 +206,7 @@ test("detach affects only one worker and a later orchestrator can resume it", as
     const { access } = await import("node:fs/promises");
     await access(first.run.workers.a.worktree);
     assert.equal(takeover?.includes("--no-extensions"), true);
-    assert.equal(takeover?.includes("PI_SWARM_WORKER"), true);
+    assert.equal(takeover?.includes("PI_CAPSTAN_WORKER"), true);
     assert.equal(takeover?.includes("'-e'"), true);
 
     first.run.phase = "executing";
@@ -230,7 +233,7 @@ test("detach affects only one worker and a later orchestrator can resume it", as
 });
 
 test("independent workers continue after one failure and dependent work is blocked", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-partial-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-partial-"));
   try {
     const fixture = await makeOrchestratorFixture(root, "partial", 20);
     fixture.run.plan.subtasks[0].acceptance.commands = [FAIL_COMMAND];
@@ -251,7 +254,7 @@ test("independent workers continue after one failure and dependent work is block
 });
 
 test("slot scheduler starts queued work as soon as one slot frees", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-slots-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-slots-"));
   try {
     const fixture = await makeOrchestratorFixture(root, "slots", 20, async () => "stop", { FAKE_PI_WAIT_FOR_WORKER_MAP: JSON.stringify({ a: "c" }) });
     fixture.run.plan.subtasks.push({ id: "c", title: "c", goal: "c", role: "c", rolePrompt: "c", ownedPaths: ["src/c/**"], readPaths: [], dependsOn: [], contracts: [], acceptance: { commands: [PASS_COMMAND], criteria: [] } });
@@ -268,16 +271,31 @@ test("slot scheduler starts queued work as soon as one slot frees", async () => 
 });
 
 test("runtime replan can add pending work without mutating started tasks", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-replan-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-replan-"));
   try {
-    const fixture = await makeOrchestratorFixture(root, "replan", 250);
+    const releaseFile = "replan-release";
+    const fixture = await makeOrchestratorFixture(root, "replan", 250, async () => "stop", { FAKE_PI_RELEASE_FILE: releaseFile });
     const execution = fixture.orchestrator.execute(false);
-    await waitFor(() => fixture.run.workers.a?.status === "working" && fixture.run.workers.b?.status === "working");
+    await waitFor(
+      () => fixture.run.workers.a?.status === "working" && fixture.run.workers.b?.status === "working",
+      20_000,
+      () => ({
+        phase: fixture.run.phase,
+        error: fixture.run.error,
+        workers: Object.fromEntries(Object.entries(fixture.run.workers).map(([id, worker]: [string, any]) => [id, {
+          status: worker.status,
+          action: worker.currentAction,
+          startedAt: worker.startedAt,
+          endedAt: worker.endedAt,
+        }])),
+      }),
+    );
     await fixture.orchestrator.pause();
     const plan = structuredClone(fixture.run.plan);
     plan.subtasks.push({ id: "c", title: "c", goal: "c", role: "c", rolePrompt: "c", ownedPaths: ["src/c/**"], readPaths: [], dependsOn: ["a"], contracts: [], acceptance: { commands: [PASS_COMMAND], criteria: [] } });
     plan.mergeOrder.push("c");
     await fixture.orchestrator.replacePlan(plan);
+    await writeFile(join(root, releaseFile), "release");
     await fixture.orchestrator.resume();
     await execution;
     assert.equal(fixture.run.planRevision, 2);
@@ -288,7 +306,7 @@ test("runtime replan can add pending work without mutating started tasks", async
 });
 
 test("simultaneous worker approvals are routed as one batch", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-ui-batch-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-ui-batch-"));
   try {
     let batches = 0;
     const fixture = await makeOrchestratorFixture(root, "ui-batch", 20, async () => "stop", { FAKE_PI_UI: "1", FAKE_PI_UI_BARRIER_COUNT: "2" }, async (requests) => {
@@ -306,7 +324,7 @@ test("simultaneous worker approvals are routed as one batch", async () => {
 });
 
 test("best-of-N runs isolated candidates and records the selected winner", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-best-of-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-best-of-"));
   try {
     const fixture = await makeOrchestratorFixture(root, "best-of", 20);
     fixture.config.worker.bestOfN = 2;
@@ -323,7 +341,7 @@ test("best-of-N runs isolated candidates and records the selected winner", async
 });
 
 test("trusted setup runs before worker and integration verification without spending retries", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-setup-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-setup-"));
   try {
     const fixture = await makeOrchestratorFixture(root, "setup", 20, async () => "stop", {}, undefined, true);
     fixture.config.worker.setupCommands = ['node -e "require(\'fs\').mkdirSync(\'node_modules\',{recursive:true}),require(\'fs\').writeFileSync(\'node_modules/setup.marker\',\'ok\')"'];
@@ -349,11 +367,12 @@ const nameIndex = process.argv.indexOf("--name");
 const sessionDirIndex = process.argv.indexOf("--session-dir");
 const workerName = nameIndex >= 0 ? process.argv[nameIndex + 1] : undefined;
 const sessionDir = sessionDirIndex >= 0 ? process.argv[sessionDirIndex + 1] : undefined;
-const workerId = workerName?.match(/^swarm\\/([A-Za-z0-9_-]+)/)?.[1] ?? (sessionDir ? basename(sessionDir) : "unknown");
+const workerId = workerName?.match(/^capstan\\/([A-Za-z0-9_-]+)/)?.[1] ?? (sessionDir ? basename(sessionDir) : "unknown");
 const delayMap = JSON.parse(process.env.FAKE_PI_DELAY_MAP ?? "{}");
 const delay = Number(delayMap[workerId] ?? process.env.FAKE_PI_DELAY_MS ?? 10);
 const waitForWorkerMap = JSON.parse(process.env.FAKE_PI_WAIT_FOR_WORKER_MAP ?? "{}");
 const waitForWorker = waitForWorkerMap[workerId];
+const releaseFile = process.env.FAKE_PI_RELEASE_FILE;
 const activeTool = process.env.FAKE_PI_TOOL_ACTIVE === "1";
 const requestUi = process.env.FAKE_PI_UI === "1";
 const uiBarrierCount = Number(process.env.FAKE_PI_UI_BARRIER_COUNT ?? 0);
@@ -371,9 +390,10 @@ function scheduleFinish() {
       finish();
     }, delay);
   };
-  if (!waitForWorker) return startTimer();
+  if (!waitForWorker && !releaseFile) return startTimer();
   const release = () => {
-    if (!existsSync(root + "/worker-started-" + waitForWorker)) return;
+    if (waitForWorker && !existsSync(root + "/worker-started-" + waitForWorker)) return;
+    if (releaseFile && !existsSync(root + "/" + releaseFile)) return;
     if (workerBarrierTimer) clearInterval(workerBarrierTimer), (workerBarrierTimer = undefined);
     startTimer();
   };
@@ -448,7 +468,7 @@ async function makeOrchestratorFixture(
   await git(repo, ["add", "README.md"]);
   await git(repo, ["commit", "-qm", "initial"]);
   const fake = await writeFakePi(root);
-  const runDir = join(repo, ".pi", "swarm", "runs", runId);
+  const runDir = join(repo, ".pi", "capstan", "runs", runId);
   const plan: any = {
     schemaVersion: 1,
     taskSummary: "controlled parallel",
@@ -467,7 +487,7 @@ async function makeOrchestratorFixture(
   config.run.verify.full = [];
   config.run.verifyAllowedPrefixes = ["node -e"];
   config.worker.maxConcurrency = 2;
-  const store = new RunStore(join(repo, ".pi", "swarm", "runs"));
+  const store = new RunStore(join(repo, ".pi", "capstan", "runs"));
   const orchestrator = new Orchestrator({
     run,
     config,
@@ -480,10 +500,12 @@ async function makeOrchestratorFixture(
   return { repo, fake, run, config, store, orchestrator };
 }
 
-async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
+async function waitFor(predicate: () => boolean, timeoutMs = 5_000, diagnostic?: () => unknown): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("condition timeout");
+    if (Date.now() > deadline) {
+      throw new Error(`condition timeout${diagnostic ? `: ${JSON.stringify(diagnostic())}` : ""}`);
+    }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }

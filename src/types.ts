@@ -40,7 +40,7 @@ export interface Subtask {
   estTokens?: number;
 }
 
-export interface SwarmPlan {
+export interface CapstanPlan {
   schemaVersion: 1;
   taskSummary: string;
   strategy: string;
@@ -194,7 +194,7 @@ export interface GitRunState {
   initialStatusHash: string;
 }
 
-export interface SwarmRun {
+export interface CapstanRun {
   schemaVersion: 1;
   runId: string;
   createdAt: number;
@@ -203,7 +203,7 @@ export interface SwarmRun {
   task: string;
   phase: RunPhase;
   gate?: GateResult;
-  plan?: SwarmPlan;
+  plan?: CapstanPlan;
   planning?: PlanningRuntime;
   effectiveBudget?: EffectiveBudget;
   planEdits: string[];
@@ -265,7 +265,7 @@ export interface PlanValidation {
 
 export type MergeStrategy = "branch" | "apply" | "commit";
 
-export interface SwarmConfig {
+export interface CapstanConfig {
   gate: {
     model: string | null;
     ruleThresholdHigh: number;
@@ -338,7 +338,7 @@ export interface SwarmConfig {
   safetyGuardPath: string | null;
 }
 
-export interface ParsedSwarmCommand {
+export interface ParsedCapstanCommand {
   action: "run" | "board" | "pause" | "resume" | "abort" | "merge" | "pr" | "replan" | "clean" | "cases" | "replay" | "config" | "validate" | "analyze" | "status" | "help";
   task: string;
   force: boolean;

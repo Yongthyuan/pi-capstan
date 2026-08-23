@@ -7,7 +7,7 @@
 [![Node](https://img.shields.io/badge/node-%E2%89%A522.19-3FB950.svg)](./package.json)
 [![Pi](https://img.shields.io/badge/Pi-%E2%89%A50.84.1-8957E5.svg)](https://github.com/badlogic/pi-mono)
 
-**Capstan runs several AI coding agents on your repository at the same time — without letting go of the wheel.** Plans are reviewed before money is spent, every worker is isolated in its own Git worktree, costs are hard-capped, and only verified results get merged. It is a [Pi](https://github.com/badlogic/pi-mono) extension, formerly released as *pi-agent-swarm*.
+**Capstan runs several AI coding agents on your repository at the same time — without letting go of the wheel.** Plans are reviewed before money is spent, every worker is isolated in its own Git worktree, costs are hard-capped, and only verified results get merged. It is a [Pi](https://github.com/badlogic/pi-mono) extension, formerly named *pi-agent-swarm*.
 
 <!-- Drop a demo recording at docs/assets/demo.gif, then uncomment:
 <p align="center"><img src="docs/assets/demo.gif" alt="Capstan: plan → approve → parallel workers → verified merge" width="720"></p>
@@ -20,9 +20,9 @@ One coding agent is slow. Five coding agents are chaos: they edit the same files
 Capstan's answer is a pipeline, not a free-for-all:
 
 ```text
-/swarm "add OAuth login, write tests, update the README"
+/capstan "add OAuth login, write tests, update the README"
    │
-   ├─ 1. GATE      trivial request? it runs solo — no swarm, no extra cost
+   ├─ 1. GATE      trivial request? it runs solo — no capstan, no extra cost
    ├─ 2. PLAN      a planner reads your repo and proposes a task DAG
    ├─ 3. CONFIRM   you review the plan (tasks, order, acceptance checks) — nothing spent yet
    ├─ 4. BUILD     up to 8 workers, each in its own Git worktree, owning its own files
@@ -39,19 +39,19 @@ pi install npm:pi-capstan
 Restart Pi, then just talk to it:
 
 ```text
-/swarm "implement the OAuth backend, the login page, tests, and docs"
+/capstan "implement the OAuth backend, the login page, tests, and docs"
 ```
 
-You will see the plan first. Approve it and watch the workers fan out on the dashboard; decline it and nothing was spent. **Zero configuration required** — safe defaults ship enabled. When you want to tune concurrency, budgets, or verification, run `/swarm config`; most people never do.
+You will see the plan first. Approve it and watch the workers fan out on the dashboard; decline it and nothing was spent. **Zero configuration required** — safe defaults ship enabled. When you want to tune concurrency, budgets, or verification, run `/capstan config`; most people never do.
 
 ## What you get
 
-- **Nothing runs without your yes.** Every swarm produces a reviewable plan and waits. Declining costs nothing.
+- **Nothing runs without your yes.** Every capstan produces a reviewable plan and waits. Declining costs nothing.
 - **Workers never collide.** Each task works in its own Git worktree with declared file ownership. Out-of-scope edits are reverted precisely — the rest of the work survives.
 - **Costs are capped, twice.** Per-worker and whole-run dollar and token budgets stop runaway turns instead of surprising your invoice.
 - **Green means green.** Results pass two verification levels (per-task and integrated) using allowlisted commands before anything lands.
 - **Failure stays local.** A broken task doesn't sink independent ones; a crashed session resumes where it left off; orphaned workers get reclaimed.
-- **Small tasks stay cheap.** Complexity gating routes simple requests to solo mode instead of paying for a swarm. Disagree? `--force`.
+- **Small tasks stay cheap.** Complexity gating routes simple requests to solo mode instead of paying for a capstan. Disagree? `--force`.
 
 ## Capstan vs. delegation tools
 
@@ -64,28 +64,26 @@ Pi's ecosystem has great *delegation* extensions — a parent agent asking child
 | Cost | usually uncounted | hard budgets, live accounting |
 | Landing | whatever the model did | verified, branch-first merge you control |
 
-> Note: this is **not** [`@gjczone/pi-swarm`](https://www.npmjs.com/package/@gjczone/pi-swarm) (item fan-out + mailbox coordinator). Different tool, different philosophy.
-
 ## Commands
 
 ```text
-/swarm "task"                      start a swarm (add --force --max 4 --best-of 2 --plan-only as needed)
-/swarm board                       live dashboard
-/swarm pause | resume | abort      control the running swarm
-/swarm replan                      add work mid-run
-/swarm merge | clean | replay      land or clean up finished runs
-/swarm pr [runId]                  push the integration branch and open a PR
-/swarm cases                       browse/rate past runs (improves future planning)
-/swarm config | validate | status  configure, lint config, inspect state
+/capstan "task"                      start a capstan (add --force --max 4 --best-of 2 --plan-only as needed)
+/capstan board                       live dashboard
+/capstan pause | resume | abort      control the running capstan
+/capstan replan                      add work mid-run
+/capstan merge | clean | replay      land or clean up finished runs
+/capstan pr [runId]                  push the integration branch and open a PR
+/capstan cases                       browse/rate past runs (improves future planning)
+/capstan config | validate | status  configure, lint config, inspect state
 ```
 
-The main Pi model can also call the `swarm_delegate` tool — it still cannot bypass plan confirmation.
+Programmatic delegation is a first-class citizen too: the main Pi model can call the `capstan_delegate` tool, and it goes through the same plan gate as everything else.
 
 ## Safety defaults (always on)
 
 Branch-first landing (never auto-applies to your checkout) · plan confirmation gate · dollar + token budgets at worker and run level · scope-violation revert · two-level verification with a command prefix allowlist · worker extension isolation · credential redaction in logs and the case store · atomic state with recovery.
 
-Git worktrees give you **concurrency isolation, not an OS sandbox**. For genuinely hostile code, use a container — this tool prevents accidents, not attacks.
+Git worktrees isolate concurrent work — they don't contain malicious code. Trust your repo and these defaults have you covered; don't trust it? Run Capstan inside a container.
 
 ## Documentation
 
@@ -100,7 +98,7 @@ Git worktrees give you **concurrency isolation, not an OS sandbox**. For genuine
 ```bash
 npm ci
 npm run check        # types + syntax
-npm test             # 58 tests
+npm test             # unit suite
 npm run test:native  # real Pi RPC smoke
 ```
 

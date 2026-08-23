@@ -1,6 +1,6 @@
 # Example Configurations and Extensions
 
-This directory contains ready-to-use examples for common swarm customization scenarios.
+This directory contains ready-to-use examples for common capstan customization scenarios.
 
 ## Configuration Examples
 
@@ -64,7 +64,7 @@ For experimentation and rapid prototyping.
 - Minimal retries
 - Case learning enabled (learns for next time)
 
-**Use when**: Proof-of-concepts, throwaway experiments, learning swarm behavior
+**Use when**: Proof-of-concepts, throwaway experiments, learning capstan behavior
 
 **Cost**: ~$3-5 per run
 
@@ -74,23 +74,23 @@ For experimentation and rapid prototyping.
 
 ```bash
 # Copy example to your project
-cp docs/examples/configs/high-quality-production.json .pi/swarm.json
+cp docs/examples/configs/high-quality-production.json .pi/capstan.json
 
 # Customize as needed
-vi .pi/swarm.json
+vi .pi/capstan.json
 ```
 
 ### Option 2: Copy to Global Config
 
 ```bash
 # Use for all projects by default
-cp docs/examples/configs/fast-iteration-low-cost.json ~/.pi/agent/swarm.json
+cp docs/examples/configs/fast-iteration-low-cost.json ~/.pi/agent/capstan.json
 ```
 
 ### Option 3: Merge with Existing Config
 
 ```json
-// Your existing .pi/swarm.json
+// Your existing .pi/capstan.json
 {
   "worker": {
     // Your existing worker config
@@ -124,15 +124,15 @@ Located in [`extensions/`](./extensions/):
 Adds database query and semantic search tools for workers.
 
 **Tools added**:
-- `swarm_query_db` - Execute read-only SQL queries
-- `swarm_semantic_search` - Natural language code search
+- `capstan_query_db` - Execute read-only SQL queries
+- `capstan_semantic_search` - Natural language code search
 
 **Installation**:
 ```bash
 # 1. Copy to extensions directory
 cp docs/examples/extensions/custom-db-tools.ts ~/.pi/agent/extensions/
 
-# 2. Configure in swarm.json
+# 2. Configure in capstan.json
 {
   "safetyGuardPath": "~/.pi/agent/extensions/custom-db-tools.ts"
 }
@@ -159,7 +159,7 @@ Enforces project-specific rules and conventions.
 # 1. Copy to extensions directory
 cp docs/examples/extensions/custom-validation-policies.ts ~/.pi/agent/extensions/
 
-# 2. Configure in swarm.json
+# 2. Configure in capstan.json
 {
   "safetyGuardPath": "~/.pi/agent/extensions/custom-validation-policies.ts"
 }
@@ -175,7 +175,7 @@ cp docs/examples/extensions/custom-validation-policies.ts ~/.pi/agent/extensions
 // In your custom extension
 export default function(pi: ExtensionAPI) {
   pi.registerTool({
-    name: "swarm_my_tool",
+    name: "capstan_my_tool",
     label: "My Custom Tool",
     description: "What it does",
     parameters: {
@@ -238,7 +238,7 @@ User says: **"快速试验"** or **"PoC"** or **"low cost"**
 Read docs/examples/configs/[chosen-pattern].json
 
 # Copy to project
-cp docs/examples/configs/[pattern].json .pi/swarm.json
+cp docs/examples/configs/[pattern].json .pi/capstan.json
 
 # Explain trade-offs
 "这个配置使用 best-of-3 竞争，质量最高但成本约 3 倍。

@@ -1,7 +1,7 @@
 # Capstan Design Philosophy
 
 > Distilled from the architecture / product discussion that framed the
-> “Agent-configurable Swarm” roadmap. This is the north star for what we build
+> “Agent-configurable Capstan” roadmap. This is the north star for what we build
 > and what we refuse to build.
 
 ## One-line thesis
@@ -12,7 +12,7 @@ configuration and extension interface via readable docs and optional plugins.**
 ```
 User → Agent (reads docs, understands capabilities, generates config/plugins)
          → Capstan (executes with native Pi + Git primitives)
-         ↑______________ feedback (/swarm analyze, cases) ______________|
+         ↑______________ feedback (/capstan analyze, cases) ______________|
 ```
 
 This mirrors Pi itself: `AGENTS.md`, skills, and extensions are all
@@ -27,7 +27,7 @@ planes that only humans can operate through GUIs.
    (gate → plan → DAG workers → verify → merge → report → cases). Expose them
    thoroughly so agents can customize behavior without forking the core.
 3. **Agent as the smart UI** — Humans describe intent in natural language;
-   agents translate intent into `swarm.json`, guards, and plugins by reading
+   agents translate intent into `capstan.json`, guards, and plugins by reading
    `docs/`.
 4. **Declarative over hard-coded workflows** — Contrast with LangGraph / CrewAI /
    AutoGen-style “developer writes the graph in code.” Here the durable artifact
@@ -63,7 +63,7 @@ Capstan’s bet is different:
   behavior without a release cycle.
 
 Neither is universally “better.” If you need cluster-scale graph serving,
-LangGraph-class systems win. If you want a Pi-native coding swarm that an agent
+LangGraph-class systems win. If you want a Pi-native coding capstan that an agent
 can reconfigure mid-conversation, this design wins.
 
 ### Versus other Pi multi-agent patterns
@@ -83,12 +83,12 @@ documented; let agents compose them.
 | Layer | Role | Agent interaction |
 |---|---|---|
 | **Docs** | Contract of the system | Read `docs/FOR_CLAUDE.md`, `CONFIGURATION.md`, `EXTENSION_POINTS.md`, `PLUGINS.md` |
-| **Config** | Declarative behavior | Generate / edit `.pi/swarm.json`; validate with `/swarm validate` |
-| **Wizard + templates** | Fast path to sane presets | `/swarm config` wizard; copy `docs/examples/configs/*` |
+| **Config** | Declarative behavior | Generate / edit `.pi/capstan.json`; validate with `/capstan validate` |
+| **Wizard + templates** | Fast path to sane presets | `/capstan config` wizard; copy `docs/examples/configs/*` |
 | **Guards** | Per-worker tools & policy | Custom extensions via `safetyGuardPath` |
 | **Plugins** | Optional: narrow worker verify commands, concurrency width | Paths in `run.*Strategy` fields; collaboration tools are not injected |
-| **Observability** | Close the feedback loop | `/swarm analyze` → config recommendations |
-| **Cases** | Optional history | Past plans can inform planning; rate them with `/swarm cases rate` |
+| **Observability** | Close the feedback loop | `/capstan analyze` → config recommendations |
+| **Cases** | Optional history | Past plans can inform planning; rate them with `/capstan cases rate` |
 
 ## Feasibility verdict (from the original discussion)
 
@@ -104,7 +104,7 @@ Priority order that follows from the philosophy:
 2. **Config assist** (wizard, templates, validate/autofix)
 3. **Plugin interfaces wired into the runtime** (verification first)
 4. **Analyze / recommend** (agents improve configs from history)
-5. Only then: heavier core refactors (orchestrator split, hierarchical swarms, …)
+5. Only then: heavier core refactors (orchestrator split, hierarchical capstans, …)
 
 ## Design tests (use before adding features)
 

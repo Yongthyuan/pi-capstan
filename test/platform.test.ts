@@ -6,10 +6,10 @@ import { processMarkerCommand } from "../src/process-identity.ts";
 test("manual takeover command is native to POSIX and PowerShell", () => {
   const posix = buildManualTakeoverCommand("/tmp/work tree", "/tmp/run", ["pi", "--no-extensions"], "darwin");
   assert.match(posix, /^cd /);
-  assert.match(posix, /env PI_SWARM_WORKER=1/);
+  assert.match(posix, /env PI_CAPSTAN_WORKER=1/);
   const windows = buildManualTakeoverCommand("C:\\work tree", "C:\\run", ["pi", "--no-extensions"], "win32");
   assert.match(windows, /^Set-Location -LiteralPath/);
-  assert.match(windows, /\$env:PI_SWARM_WORKER='1'/);
+  assert.match(windows, /\$env:PI_CAPSTAN_WORKER='1'/);
   assert.equal(windows.includes("&& env"), false);
 });
 

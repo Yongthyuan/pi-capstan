@@ -1,4 +1,4 @@
-import type { PlanValidation, SwarmPlan, Subtask } from "./types.ts";
+import type { PlanValidation, CapstanPlan, Subtask } from "./types.ts";
 import { globToRegExp } from "./utils.ts";
 import { isStructurallySafeVerificationCommand } from "./verifier.ts";
 
@@ -6,7 +6,7 @@ export function validatePlan(value: unknown, maxSubtasks = 12): PlanValidation {
   const errors: string[] = [];
   const warnings: string[] = [];
   if (!value || typeof value !== "object") return { ok: false, errors: ["计划必须是对象"], warnings, waves: [] };
-  const plan = value as Partial<SwarmPlan>;
+  const plan = value as Partial<CapstanPlan>;
   if (plan.schemaVersion !== 1) errors.push("schemaVersion 必须为 1");
   if (!stringValue(plan.taskSummary)) errors.push("taskSummary 不能为空");
   if (!stringValue(plan.strategy)) errors.push("strategy 不能为空");

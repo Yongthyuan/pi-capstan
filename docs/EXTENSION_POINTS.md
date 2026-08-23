@@ -4,11 +4,11 @@
 
 ## Overview
 
-1. **Configuration** — 51 leaf keys in `swarm.json`
+1. **Configuration** — 51 leaf keys in `capstan.json`
 2. **Custom Guards** — extra worker tools via `safetyGuardPath` (absolute path)
 3. **Verification plugin** — optional file path on `run.verificationStrategy` (worker lane; gets real git porcelain diff)
 4. **Scheduling plugin** — optional file path; **only changes concurrency**, does not reorder the DAG
-5. **Collaboration plugins** — may load; **do not inject worker tools yet**. Use `swarm_send` / `swarm_inbox`.
+5. **Collaboration plugins** — may load; **do not inject worker tools yet**. Use `capstan_send` / `capstan_inbox`.
 
 Task templates are the only truly planned feature.
 
@@ -20,9 +20,9 @@ Guards are Pi extensions loaded into each worker to enforce scope and provide to
 
 Every worker automatically gets these tools via generated guards:
 
-- **`swarm_send`** - Send message to peer worker
-- **`swarm_inbox`** - Read inbox from peers
-- **`swarm_fs`** - Scoped filesystem ops (mkdir/touch/remove/move/copy)
+- **`capstan_send`** - Send message to peer worker
+- **`capstan_inbox`** - Read inbox from peers
+- **`capstan_fs`** - Scoped filesystem ops (mkdir/touch/remove/move/copy)
 
 ### Adding Custom Worker Tools
 
@@ -31,14 +31,14 @@ You can inject additional tools into all workers by creating a custom guard exte
 **Step 1: Create Custom Guard**
 
 ```typescript
-// ~/.pi/agent/extensions/my-swarm-tools.ts
+// ~/.pi/agent/extensions/my-capstan-tools.ts
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 export default function(pi: ExtensionAPI) {
   // Custom tool: Query project database
   pi.registerTool({
-    name: "swarm_query_db",
+    name: "capstan_query_db",
     label: "Query Project Database",
     description: "Execute read-only SQL query against project database",
     parameters: Type.Object({
@@ -55,7 +55,7 @@ export default function(pi: ExtensionAPI) {
 
   // Custom tool: Semantic code search
   pi.registerTool({
-    name: "swarm_semantic_search",
+    name: "capstan_semantic_search",
     label: "Semantic Code Search",
     description: "Search codebase using natural language",
     parameters: Type.Object({
@@ -76,11 +76,11 @@ export default function(pi: ExtensionAPI) {
 
 ```json
 {
-  "safetyGuardPath": "/absolute/path/to/my-swarm-tools.ts"
+  "safetyGuardPath": "/absolute/path/to/my-capstan-tools.ts"
 }
 ```
 
-All workers will now have `swarm_query_db` and `swarm_semantic_search` available. `safetyGuardPath` does not expand `~`.
+All workers will now have `capstan_query_db` and `capstan_semantic_search` available. `safetyGuardPath` does not expand `~`.
 
 ### Custom Scope Policies
 
@@ -126,7 +126,7 @@ Empty command lists are **跳过**, not a green pass.
 
 ## 4. Coordination Primitives (Loaded, not injected)
 
-Collaboration plugins may load. Their `getTools()` are **not** injected. Workers use `swarm_send` / `swarm_inbox`.
+Collaboration plugins may load. Their `getTools()` are **not** injected. Workers use `capstan_send` / `capstan_inbox`.
 
 ## 5. Task Templates (Planned)
 
@@ -136,7 +136,7 @@ Copy `docs/examples/configs/*`. There is no template runtime.
 
 ### When to Use Configuration vs Extensions
 
-**Use Configuration** (`swarm.json`) when:
+**Use Configuration** (`capstan.json`) when:
 - Adjusting thresholds, limits, timeouts
 - Setting `run.verify` lanes (`null` / `[]` / command arrays)
 
@@ -153,9 +153,9 @@ Do not invent `customVerifiers`, `schedulerStrategy`, or `"incremental"` enums.
 User says: "Workers need to query the project database for schema information"
 
 **Your steps**:
-1. Create custom guard extension with `swarm_query_db` tool
-2. Add an **absolute** `safetyGuardPath` to `.pi/swarm.json` (`~` is not expanded)
-3. Test with `/swarm` command
+1. Create custom guard extension with `capstan_query_db` tool
+2. Add an **absolute** `safetyGuardPath` to `.pi/capstan.json` (`~` is not expanded)
+3. Test with `/capstan` command
 4. Observe workers using the new tool in their prompts
 
 ### Example: Incremental Verification

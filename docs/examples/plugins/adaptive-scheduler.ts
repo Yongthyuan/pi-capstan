@@ -9,7 +9,7 @@
  * - Detects and avoids bottleneck workers
  * - Cost-aware scheduling (expensive tasks first to fail fast)
  *
- * Usage in .pi/swarm.json:
+ * Usage in .pi/capstan.json:
  * {
  *   "run": {
  *     "schedulingStrategy": "~/.pi/agent/plugins/adaptive-scheduler.js"
@@ -18,7 +18,7 @@
  */
 
 import type { SchedulingStrategy } from '../../../src/plugins/interfaces.ts';
-import type { SwarmPlan, Subtask } from '../../../src/types.ts';
+import type { CapstanPlan, Subtask } from '../../../src/types.ts';
 
 export default class AdaptiveScheduler implements SchedulingStrategy {
   readonly name = 'adaptive-scheduler';
@@ -50,7 +50,7 @@ export default class AdaptiveScheduler implements SchedulingStrategy {
   }
 
   async schedule(
-    plan: SwarmPlan,
+    plan: CapstanPlan,
     context: {
       maxConcurrency: number;
       remainingBudget: number;

@@ -1,10 +1,10 @@
 /**
- * Load configured plugins for a swarm run.
+ * Load configured plugins for a capstan run.
  */
 
 import { homedir } from "node:os";
 import { DefaultPluginRegistry } from "./plugins/registry.ts";
-import type { SwarmConfig } from "./types.ts";
+import type { CapstanConfig } from "./types.ts";
 
 function expandPath(input: string): string {
   if (input.startsWith("~/")) return `${homedir()}/${input.slice(2)}`;
@@ -12,7 +12,7 @@ function expandPath(input: string): string {
 }
 
 export async function loadConfiguredPlugins(
-  config: SwarmConfig,
+  config: CapstanConfig,
   init: Record<string, unknown> = {},
 ): Promise<DefaultPluginRegistry> {
   const registry = new DefaultPluginRegistry();

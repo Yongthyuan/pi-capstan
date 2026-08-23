@@ -12,7 +12,7 @@ import { verifyCommands } from "../src/verifier.ts";
 import { buildGuardSource, STRICT_BASH_DENYLIST } from "../src/guard-template.ts";
 
 test("verification rejects shell composition before spawning", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-verify-policy-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-verify-policy-"));
   try {
     const marker = join(root, "owned");
     const result = await verifyCommands([`npm test; touch ${marker}`], root, 1, { allowedPrefixes: ["npm test"] });
@@ -25,7 +25,7 @@ test("verification rejects shell composition before spawning", async () => {
 });
 
 test("verification timeout terminates a subprocess within a bounded window", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-verify-timeout-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-verify-timeout-"));
   try {
     const script = join(root, "hang.mjs");
     await writeFile(script, "setInterval(() => {}, 1000);\n");
@@ -40,7 +40,7 @@ test("verification timeout terminates a subprocess within a bounded window", asy
 });
 
 test("verification timeout escalates from TERM to KILL on POSIX", { skip: process.platform === "win32" }, async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-verify-escalation-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-verify-escalation-"));
   try {
     const script = join(root, "hang.sh");
     // Windows uses taskkill, whose first non-/F attempt may either terminate
@@ -57,19 +57,19 @@ test("verification timeout escalates from TERM to KILL on POSIX", { skip: proces
 });
 
 test("verification subprocesses do not inherit credential-like environment variables", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-verify-env-"));
-  const prior = process.env.SWARM_TEST_API_KEY;
+  const root = await mkdtemp(join(tmpdir(), "capstan-verify-env-"));
+  const prior = process.env.CAPSTAN_TEST_API_KEY;
   try {
-    process.env.SWARM_TEST_API_KEY = "must-not-leak";
+    process.env.CAPSTAN_TEST_API_KEY = "must-not-leak";
     const script = join(root, "env-check.mjs");
-    await writeFile(script, "process.exit(process.env.SWARM_TEST_API_KEY ? 9 : 0);\n");
+    await writeFile(script, "process.exit(process.env.CAPSTAN_TEST_API_KEY ? 9 : 0);\n");
     // Generous timeout: process startup can stall for seconds when the whole
     // suite loads the machine, and this test only asserts env filtering.
     const result = await verifyCommands(["node env-check.mjs"], root, 30, { allowedPrefixes: ["node env-check.mjs"] });
     assert.equal(result.ok, true);
   } finally {
-    if (prior === undefined) delete process.env.SWARM_TEST_API_KEY;
-    else process.env.SWARM_TEST_API_KEY = prior;
+    if (prior === undefined) delete process.env.CAPSTAN_TEST_API_KEY;
+    else process.env.CAPSTAN_TEST_API_KEY = prior;
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -100,7 +100,7 @@ test("planner repairs malformed JSON responses", async () => {
 });
 
 test("retention removes only expired logs and sessions", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-retention-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-retention-"));
   try {
     const logs = join(root, "r1", "logs");
     const sessions = join(root, "r1", "sessions", "w1");
@@ -126,7 +126,7 @@ test("retention removes only expired logs and sessions", async () => {
 });
 
 test("canonical write target supports multiple missing parent directories", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-canonical-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-canonical-"));
   try {
     assert.equal(await canonicalWriteTarget("a/b/c.txt", root), join(await realpath(root), "a", "b", "c.txt"));
   } finally {
@@ -150,9 +150,9 @@ test("worker guard exposes scoped filesystem and mailbox tools", () => {
     config: structuredClone(DEFAULT_CONFIG),
     peers: ["b"],
   });
-  assert.match(source, /name: "swarm_send"/);
-  assert.match(source, /name: "swarm_inbox"/);
-  assert.match(source, /name: "swarm_fs"/);
+  assert.match(source, /name: "capstan_send"/);
+  assert.match(source, /name: "capstan_inbox"/);
+  assert.match(source, /name: "capstan_fs"/);
   assert.match(source, /package-lock\.json/);
   assert.match(source, /"peers":\["b"\]/);
   const deny = DEFAULT_CONFIG.bashDenylist.map((value) => new RegExp(value, "i"));

@@ -172,3 +172,5 @@ export async function readTextIfPresent(path: string, maxBytes = 64_000): Promis
   const data = await readFile(path);
   return data.subarray(0, maxBytes).toString("utf8");
 }
+
+export const DOCS_BASE_URL = "https://github.com/Yongthyuan/pi-capstan/blob/main/docs";

@@ -1,6 +1,6 @@
 # Configuration Templates Guide
 
-This document explains how to use and customize pre-built swarm configuration templates.
+This document explains how to use and customize pre-built capstan configuration templates.
 
 ## Quick Start
 
@@ -9,7 +9,7 @@ This document explains how to use and customize pre-built swarm configuration te
 The fastest way to generate a project-specific configuration:
 
 ```bash
-/swarm config
+/capstan config
 # Choose "Yes" when prompted to use the wizard
 # Answer 4 questions about your use case
 # Review and save the generated configuration
@@ -21,10 +21,10 @@ Copy and customize one of the templates in `docs/examples/configs/`:
 
 ```bash
 # Copy template to your project
-cp docs/examples/configs/high-quality-production.json .pi/swarm.json
+cp docs/examples/configs/high-quality-production.json .pi/capstan.json
 
 # Edit to match your project
-nano .pi/swarm.json
+nano .pi/capstan.json
 ```
 
 ## Available Templates
@@ -129,7 +129,7 @@ nano .pi/swarm.json
 **When to use:**
 - "Does this approach work?"
 - Building throwaway prototypes
-- Testing swarm on small tasks
+- Testing capstan on small tasks
 - Budget-conscious exploration
 
 **Cost estimate:** $1.5-4.5 per run
@@ -295,17 +295,17 @@ After customizing a template:
 
 1. **Validate syntax:**
    ```bash
-   node -e "console.log(JSON.parse(require('fs').readFileSync('.pi/swarm.json')))"
+   node -e "console.log(JSON.parse(require('fs').readFileSync('.pi/capstan.json')))"
    ```
 
 2. **Test with small task:**
    ```bash
-   /swarm "add a simple helper function" --budget 2
+   /capstan "add a simple helper function" --budget 2
    ```
 
 3. **Check cost:**
    ```bash
-   /swarm status
+   /capstan status
    # Review "totals.cost" in the output
    ```
 

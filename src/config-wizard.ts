@@ -1,12 +1,13 @@
 /**
- * Interactive configuration wizard for pi-swarm.
+ * Interactive configuration wizard for pi-capstan.
  *
- * Guides users through creating project-specific swarm configurations
+ * Guides users through creating project-specific capstan configurations
  * by asking about use case, constraints, and preferences.
  */
 
 import { writeFileSync } from "node:fs";
-import type { SwarmConfig } from "./types.ts";
+import type { CapstanConfig } from "./types.ts";
+import { DOCS_BASE_URL } from "./utils.ts";
 
 export interface WizardAnswers {
   useCase: "large-refactor" | "production-feature" | "untrusted-code" | "fast-iteration" | "custom";
@@ -16,10 +17,10 @@ export interface WizardAnswers {
 }
 
 /**
- * Generate swarm configuration based on wizard answers.
+ * Generate capstan configuration based on wizard answers.
  * Returns a partial config suitable for deep-merge into defaults.
  */
-export function generateConfigFromAnswers(answers: WizardAnswers): Partial<SwarmConfig> {
+export function generateConfigFromAnswers(answers: WizardAnswers): Partial<CapstanConfig> {
   const config: Record<string, unknown> = {};
 
   switch (answers.useCase) {
@@ -38,7 +39,7 @@ export function generateConfigFromAnswers(answers: WizardAnswers): Partial<Swarm
       config.worker = {
         strictBash: true,
         scopeViolationPolicy: "fail",
-        tools: ["read", "edit", "write", "grep", "find", "ls", "swarm_send", "swarm_inbox", "swarm_fs"],
+        tools: ["read", "edit", "write", "grep", "find", "ls", "capstan_send", "capstan_inbox", "capstan_fs"],
         maxRetries: 1,
       };
       config.run = { budgetUsd: answers.maxBudget ?? 10, mergeStrategy: "branch" };
@@ -75,10 +76,10 @@ export function generateConfigFromAnswers(answers: WizardAnswers): Partial<Swarm
     run.verify = { worker: [], integrationLight: [], full: [] };
   }
 
-  return config as Partial<SwarmConfig>;
+  return config as Partial<CapstanConfig>;
 }
 
-export function describeConfig(config: Partial<SwarmConfig>, answers: WizardAnswers): string {
+export function describeConfig(config: Partial<CapstanConfig>, answers: WizardAnswers): string {
   const lines: string[] = ["Generated configuration:\n"];
   lines.push(`Use case: ${answers.useCase}`);
 
@@ -114,7 +115,7 @@ export function describeConfig(config: Partial<SwarmConfig>, answers: WizardAnsw
  */
 export function writeConfigWithComments(
   filePath: string,
-  config: Partial<SwarmConfig>,
+  config: Partial<CapstanConfig>,
   answers: WizardAnswers,
 ): void {
   const payload = {
@@ -123,7 +124,7 @@ export function writeConfigWithComments(
       qualityLevel: answers.qualityLevel,
       verification: answers.verification,
       generatedAt: new Date().toISOString(),
-      docs: "docs/CONFIGURATION.md",
+      docs: `${DOCS_BASE_URL}/CONFIGURATION.md`,
     },
     ...config,
   };

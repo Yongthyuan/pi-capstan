@@ -34,7 +34,7 @@ export class RepoLock {
     const common = await runCommand("git", ["rev-parse", "--git-common-dir"], { cwd: repoRoot, timeoutMs: 10_000 });
     if (common.exitCode !== 0) throw new Error("仓库锁要求有效 Git 仓库");
     const commonDir = isAbsolute(common.stdout.trim()) ? common.stdout.trim() : join(repoRoot, common.stdout.trim());
-    return new RepoLock(repoRoot, runId, join(commonDir, "pi-swarm.lock"));
+    return new RepoLock(repoRoot, runId, join(commonDir, "pi-capstan.lock"));
   }
 
   async acquire(): Promise<void> {
@@ -60,11 +60,11 @@ export class RepoLock {
         if (error?.code !== "EEXIST") throw error;
         const existing = await this.readOwner();
         if (existing && await processMatches(existing.pid, existing.pidMarker)) {
-          throw new Error(`仓库已有活跃 swarm run ${existing.runId} (pid ${existing.pid})`);
+          throw new Error(`仓库已有活跃 capstan run ${existing.runId} (pid ${existing.pid})`);
         }
         if (!existing) {
           const age = Date.now() - (await stat(this.lockDir)).mtimeMs;
-          if (age < 60_000) throw new Error("仓库 swarm 锁正在初始化，请稍后重试");
+          if (age < 60_000) throw new Error("仓库 capstan 锁正在初始化，请稍后重试");
         }
         const stale = `${this.lockDir}.stale-${randomUUID()}`;
         try { await rename(this.lockDir, stale); } catch (renameError: any) {
@@ -74,7 +74,7 @@ export class RepoLock {
         await rm(stale, { recursive: true, force: true });
       }
     }
-    throw new Error("无法取得仓库 swarm 锁");
+    throw new Error("无法取得仓库 capstan 锁");
   }
 
   async release(): Promise<void> {

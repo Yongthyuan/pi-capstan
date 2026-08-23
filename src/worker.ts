@@ -58,10 +58,10 @@ export class WorkerHandle {
     this.stopping = false;
     await ensurePrivateDir(dirname(this.logPath));
     await ensurePrivateDir(this.options.sessionDir);
-    const command = this.options.piCommand ?? process.env.PI_SWARM_PI_BIN ?? "pi";
+    const command = this.options.piCommand ?? process.env.PI_CAPSTAN_PI_BIN ?? "pi";
     const args = [...(this.options.piArgsPrefix ?? []), "--mode", "rpc", "--session-dir", this.options.sessionDir, "--no-extensions"];
     if (this.options.sessionFile && await fileExists(this.options.sessionFile)) args.push("--session", this.options.sessionFile);
-    else args.push("--name", `swarm/${this.options.id} ${this.options.title}`);
+    else args.push("--name", `capstan/${this.options.id} ${this.options.title}`);
     if (this.options.model) args.push("--model", this.options.model);
     if (this.options.tools.length) args.push("--tools", this.options.tools.join(","));
     args.push("--append-system-prompt", this.options.promptPath);
@@ -69,7 +69,7 @@ export class WorkerHandle {
     args.push("-e", this.options.guardPath, this.options.projectTrusted ? "--approve" : "--no-approve");
     const child = spawn(command, args, {
       cwd: this.options.worktree,
-      env: { ...process.env, ...this.options.extraEnv, PI_SWARM_WORKER: "1", PI_SWARM_RUN_DIR: this.options.runDir },
+      env: { ...process.env, ...this.options.extraEnv, PI_CAPSTAN_WORKER: "1", PI_CAPSTAN_RUN_DIR: this.options.runDir },
       stdio: ["pipe", "pipe", "pipe"],
       shell: false,
       detached: process.platform !== "win32",
@@ -303,7 +303,7 @@ export class WorkerHandle {
   private consumeStderr(chunk: string): void {
     this.stderrTail = truncateTail(this.stderrTail + chunk, 16_000);
     for (const line of chunk.split("\n")) {
-      if (line.startsWith("SWARM_VIOLATION ")) this.emitter.emit("action", { label: `⚠ ${line.slice(16)}` });
+      if (line.startsWith("CAPSTAN_VIOLATION ")) this.emitter.emit("action", { label: `⚠ ${line.slice(16)}` });
     }
   }
 

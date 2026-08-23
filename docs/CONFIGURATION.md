@@ -6,8 +6,8 @@
 
 Later wins:
 1. Built-in defaults (`src/config.ts` `DEFAULT_CONFIG`)
-2. Global: `~/.pi/agent/swarm.json`
-3. Project: `<repo>/.pi/swarm.json`
+2. Global: `~/.pi/agent/capstan.json`
+3. Project: `<repo>/.pi/capstan.json`
 4. Command flags only: `--max`, `--budget`, `--model`, `--best-of`
 
 Also valid run flags (not config merge): `--force`/`-f`, `--solo`, `--plan-only`/`-n`. Unknown flags become task text.
@@ -26,15 +26,15 @@ Worker verification **first** uses `subtask.acceptance.commands` from the confir
 
 - Same-wave owned+generated paths must not overlap (`src/plan-validation.ts`).
 - Out-of-scope writes: default `worker.scopeViolationPolicy` is `"revert"`, then re-verify.
-- Humans must confirm the plan. `swarm_delegate` cannot skip that.
+- Humans must confirm the plan. `capstan_delegate` cannot skip that.
 - Dirty baseline can execute but never auto-applies (`mergeStrategy: "branch"` only).
 
 ## Budgets and resume
 
 - Planner spend counts toward the run total.
 - Budget overrun interrupts the current model turn, then asks extend +25% or stop.
-- `/swarm pause` / `/swarm resume [runId]` persist atomically. Resume is idempotent.
-- `/swarm analyze` suggests config; it does not write `swarm.json`.
+- `/capstan pause` / `/capstan resume [runId]` persist atomically. Resume is idempotent.
+- `/capstan analyze` suggests config; it does not write `capstan.json`.
 
 ## Keys that do not exist
 
@@ -46,14 +46,14 @@ Worker verification **first** uses `subtask.acceptance.commands` from the confir
 
 ### Gate (Complexity Detection)
 
-Controls when a task triggers multi-agent swarm vs single-agent passthrough.
+Controls when a task triggers multi-agent capstan vs single-agent passthrough.
 
 ```json
 {
   "gate": {
     "model": null,              // Model for gate decision (null = use session model)
     "ruleThresholdLow": 0,      // Score ≤ this → simple (passthrough)
-    "ruleThresholdHigh": 5      // Score ≥ this → complex (swarm)
+    "ruleThresholdHigh": 5      // Score ≥ this → complex (capstan)
                                 // Between low and high → consult model
   }
 }
@@ -69,11 +69,11 @@ Controls when a task triggers multi-agent swarm vs single-agent passthrough.
 - −3 single-action wording (`改一行|错别字|typo|解释|看一下|单个文件|one-line`)
 - −2 small repo (`fileCount < 30`)
 
-Then: `score ≥ ruleThresholdHigh` → swarm; `score ≤ ruleThresholdLow` or no gate model → main session; in between, ask the model (failure falls back to simple).
+Then: `score ≥ ruleThresholdHigh` → capstan; `score ≤ ruleThresholdLow` or no gate model → main session; in between, ask the model (failure falls back to simple).
 
 **When to adjust**:
-- Lower threshold → more tasks use swarm (higher cost, potentially better quality)
-- Raise threshold → fewer swarm invocations (lower cost, simpler tasks handled solo)
+- Lower threshold → more tasks use capstan (higher cost, potentially better quality)
+- Raise threshold → fewer capstan invocations (lower cost, simpler tasks handled solo)
 
 ### Planner
 
@@ -115,9 +115,9 @@ Controls individual worker behavior and resource limits.
     
     "tools": [                  // Tools available to workers
       "read", "bash", "edit", "write", "grep", "find", "ls",
-      "swarm_send",             // Send message to peer worker
-      "swarm_inbox",            // Read inbox from peers
-      "swarm_fs"                // Scoped filesystem ops (mkdir/touch/remove/move/copy)
+      "capstan_send",             // Send message to peer worker
+      "capstan_inbox",            // Read inbox from peers
+      "capstan_fs"                // Scoped filesystem ops (mkdir/touch/remove/move/copy)
     ],
     
     "setupCommands": [],        // Commands run before each worker starts
@@ -399,41 +399,41 @@ Quick adjustments without editing config files:
 
 ```bash
 # Override concurrency
-/swarm "task" --max 8
+/capstan "task" --max 8
 
 # Override budget
-/swarm "task" --budget 20
+/capstan "task" --budget 20
 
 # Override model
-/swarm "task" --model anthropic/claude-opus-4
+/capstan "task" --model anthropic/claude-opus-4
 
 # Enable best-of-N
-/swarm "task" --best-of 3
+/capstan "task" --best-of 3
 
-# Force swarm (skip gate)
-/swarm "task" --force
+# Force capstan (skip gate)
+/capstan "task" --force
 
-# Solo mode (passthrough to main agent, no swarm)
-/swarm "task" --solo
+# Solo mode (passthrough to main agent, no capstan)
+/capstan "task" --solo
 
 # Plan-only (no execution)
-/swarm "task" --plan-only
+/capstan "task" --plan-only
 ```
 
 ## How Claude Should Use This
 
-When a user asks you to customize swarm behavior:
+When a user asks you to customize capstan behavior:
 
 1. **Read this document** to understand available options
 2. **Ask clarifying questions** about constraints (budget, time, quality vs speed)
-3. **Generate appropriate config** in `.pi/swarm.json`
+3. **Generate appropriate config** in `.pi/capstan.json`
 4. **Explain trade-offs** of the chosen configuration
-5. **Test with `/swarm` command** and observe results
+5. **Test with `/capstan` command** and observe results
 6. **Iterate** based on feedback
 
 ### Example User Request
 
-> "我需要一个 swarm 配置，用于大规模重构，但是要确保质量，预算不是问题"
+> "我需要一个 capstan 配置，用于大规模重构，但是要确保质量，预算不是问题"
 
 **Your response should**:
 ```json

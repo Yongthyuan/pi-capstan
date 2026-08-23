@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SwarmConfig, Subtask } from "./types.ts";
+import type { CapstanConfig, Subtask } from "./types.ts";
 import { ensurePrivateDir } from "./utils.ts";
 
 export interface GuardOptions {
@@ -9,7 +9,7 @@ export interface GuardOptions {
   heartbeatFile: string;
   task: Subtask;
   trusted: boolean;
-  config: SwarmConfig;
+  config: CapstanConfig;
   peers?: string[];
 }
 
@@ -99,8 +99,8 @@ const stringSchema = { type: "string" };
 
 export default function(pi: ExtensionAPI) {
   pi.registerTool({
-    name: "swarm_send",
-    label: "Send Swarm Message",
+    name: "capstan_send",
+    label: "Send Capstan Message",
     description: "Send a concise coordination message to a peer worker in this run.",
     parameters: objectSchema({ to: { type: "string", enum: cfg.peers }, message: stringSchema }, ["to", "message"]),
     async execute(_id: string, input: { to: string; message: string }) {
@@ -113,8 +113,8 @@ export default function(pi: ExtensionAPI) {
     },
   } as any);
   pi.registerTool({
-    name: "swarm_inbox",
-    label: "Read Swarm Inbox",
+    name: "capstan_inbox",
+    label: "Read Capstan Inbox",
     description: "Read recent messages from peer workers.",
     parameters: objectSchema({}, []),
     async execute() {
@@ -124,7 +124,7 @@ export default function(pi: ExtensionAPI) {
     },
   } as any);
   pi.registerTool({
-    name: "swarm_fs",
+    name: "capstan_fs",
     label: "Scoped Filesystem Operation",
     description: "Perform mkdir, touch, remove, move, or copy inside owned paths without shell mutation.",
     parameters: objectSchema({ operation: { type: "string", enum: ["mkdir", "touch", "remove", "move", "copy"] }, path: stringSchema, destination: stringSchema }, ["operation", "path"]),
@@ -144,7 +144,7 @@ export default function(pi: ExtensionAPI) {
         }
         return { content: [{ type: "text", text: input.operation + " completed for " + source.rel }] };
       } catch (error) {
-        console.error("SWARM_VIOLATION " + String(error));
+        console.error("CAPSTAN_VIOLATION " + String(error));
         return { content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }], isError: true };
       }
     },
@@ -163,12 +163,12 @@ export default function(pi: ExtensionAPI) {
       const target = canonical(event.input.path);
       const rel = relative(root, target).replaceAll("\\\\", "/");
       if (rel === ".." || rel.startsWith("../") || isAbsolute(rel) || !owned.some((rx: RegExp) => rx.test(rel))) {
-        console.error("SWARM_VIOLATION " + target);
+        console.error("CAPSTAN_VIOLATION " + target);
         return { block: true, reason: "scope violation: " + target };
       }
     }
     if (isToolCallEventType("bash", event) && deny.some((rx: RegExp) => rx.test(event.input.command))) {
-      return { block: true, reason: "swarm guard blocked a mutating or dangerous shell command" };
+      return { block: true, reason: "capstan guard blocked a mutating or dangerous shell command" };
     }
   });
 }

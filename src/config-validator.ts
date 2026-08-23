@@ -1,4 +1,4 @@
-import type { SwarmConfig } from "./types.ts";
+import type { CapstanConfig } from "./types.ts";
 
 export interface ValidationIssue {
   path: string;
@@ -12,7 +12,7 @@ export interface ValidationResult {
   issues: ValidationIssue[];
 }
 
-export function validateConfig(config: SwarmConfig): ValidationResult {
+export function validateConfig(config: CapstanConfig): ValidationResult {
   const issues: ValidationIssue[] = [];
 
   // Gate 验证
@@ -230,8 +230,8 @@ export function formatValidationResult(result: ValidationResult): string {
   return lines.join("\n");
 }
 
-export function autoFixConfig(config: SwarmConfig): { fixed: SwarmConfig; changes: string[] } {
-  const fixed = JSON.parse(JSON.stringify(config)) as SwarmConfig;
+export function autoFixConfig(config: CapstanConfig): { fixed: CapstanConfig; changes: string[] } {
+  const fixed = JSON.parse(JSON.stringify(config)) as CapstanConfig;
   const changes: string[] = [];
 
   // 修复 gate thresholds

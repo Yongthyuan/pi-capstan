@@ -1,5 +1,5 @@
 /**
- * Plugin interfaces for extending pi-swarm behavior.
+ * Plugin interfaces for extending pi-capstan behavior.
  *
  * These interfaces allow Claude to create custom strategies for:
  * - Verification (how to validate worker output)
@@ -7,7 +7,7 @@
  * - Collaboration (how workers communicate)
  */
 
-import type { Subtask, VerificationResult, SwarmPlan } from "../types.ts";
+import type { Subtask, VerificationResult, CapstanPlan } from "../types.ts";
 
 /**
  * Verification Strategy Plugin
@@ -81,7 +81,7 @@ export interface VerificationStrategy {
   }>;
 
   /**
-   * Called when plugin is unloaded or swarm completes.
+   * Called when plugin is unloaded or capstan completes.
    */
   cleanup?(): Promise<void>;
 }
@@ -106,12 +106,12 @@ export interface SchedulingStrategy {
   /**
    * Decide the initial execution order and parallelism.
    *
-   * @param plan - The validated swarm plan with DAG
+   * @param plan - The validated capstan plan with DAG
    * @param context - Runtime context (available slots, budget)
    * @returns Ordered batches of task IDs to execute
    */
   schedule(
-    plan: SwarmPlan,
+    plan: CapstanPlan,
     context: {
       maxConcurrency: number;
       remainingBudget: number;
@@ -164,7 +164,7 @@ export interface CollaborationPrimitive {
    * Return custom tools to inject into worker sessions.
    *
    * Reserved. Collaboration plugins load, but `getTools()` is **not** injected into workers.
-   * Workers still use built-in `swarm_send` / `swarm_inbox`.
+   * Workers still use built-in `capstan_send` / `capstan_inbox`.
    */
   getTools(): Array<{
     name: string;

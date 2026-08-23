@@ -1,7 +1,7 @@
 import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { ParsedSwarmCommand, SwarmConfig, SwarmPlan, SwarmRun } from "./types.ts";
+import type { ParsedCapstanCommand, CapstanConfig, CapstanPlan, CapstanRun } from "./types.ts";
 import { CaseStore } from "./cases.ts";
 import { loadConfig } from "./config.ts";
 import { decideGate } from "./gate.ts";
@@ -10,7 +10,7 @@ import { buildRepoBrief, createPlan, type RepoBrief } from "./planner.ts";
 import { pruneRunArtifacts, RunStore } from "./state.ts";
 import { WorkspaceManager } from "./workspace.ts";
 import { Orchestrator } from "./orchestrator.ts";
-import { addUsage, emptyUsage, ensurePrivateDir, makeRunId, pathExists, runCommand } from "./utils.ts";
+import { DOCS_BASE_URL, addUsage, emptyUsage, ensurePrivateDir, makeRunId, pathExists, runCommand } from "./utils.ts";
 import { reviewPlan } from "./ui/plan-panel.ts";
 import { renderRunText, showDashboard, widgetLines } from "./ui/dashboard.ts";
 import { RepoLock } from "./repo-lock.ts";
@@ -19,13 +19,13 @@ import { validateConfig, formatValidationResult, autoFixConfig } from "./config-
 import { RunAnalyzer } from "./analyzer.ts";
 import { generateConfigFromAnswers, describeConfig, writeConfigWithComments, type WizardAnswers } from "./config-wizard.ts";
 
-export class SwarmService {
+export class CapstanService {
   readonly pi: ExtensionAPI;
   readonly agentDir: string;
   readonly configDirName: string;
-  activeRun?: SwarmRun;
+  activeRun?: CapstanRun;
   activeOrchestrator?: Orchestrator;
-  private activeConfig?: SwarmConfig;
+  private activeConfig?: CapstanConfig;
 
   constructor(pi: ExtensionAPI, agentDir: string, configDirName: string) {
     this.pi = pi;
@@ -33,7 +33,7 @@ export class SwarmService {
     this.configDirName = configDirName;
   }
 
-  async handle(parsed: ParsedSwarmCommand, ctx: ExtensionCommandContext): Promise<void> {
+  async handle(parsed: ParsedCapstanCommand, ctx: ExtensionCommandContext): Promise<void> {
     for (const warning of parsed.warnings) ctx.ui.notify(warning, "warning");
     if (parsed.action === "run") return this.runTask(parsed.task, ctx, parsed);
     if (parsed.action === "board") return this.board(ctx);
@@ -53,7 +53,7 @@ export class SwarmService {
     return this.help(ctx);
   }
 
-  async runTask(task: string, ctx: ExtensionContext, options: Partial<ParsedSwarmCommand> = {}): Promise<void> {
+  async runTask(task: string, ctx: ExtensionContext, options: Partial<ParsedCapstanCommand> = {}): Promise<void> {
     if (this.activeRun && !["done", "failed", "aborted"].includes(this.activeRun.phase)) throw new Error(`已有活跃 run ${this.activeRun.runId}`);
     if (options.solo) {
       this.pi.sendUserMessage(task);
@@ -62,7 +62,7 @@ export class SwarmService {
     const detectedRepoRoot = await detectRepoRoot(ctx.cwd);
     const repoRoot = detectedRepoRoot ?? ctx.cwd;
     const config = await loadConfig(this.agentDir, repoRoot, this.configDirName);
-    await pruneRunArtifacts(join(repoRoot, this.configDirName, "swarm", "runs"), config.retention);
+    await pruneRunArtifacts(join(repoRoot, this.configDirName, "capstan", "runs"), config.retention);
     const currentModel = (ctx as any).model as { provider?: string; id?: string } | undefined;
     if (!config.worker.model && currentModel?.provider && currentModel.id) config.worker.model = `${currentModel.provider}/${currentModel.id}`;
     if (options.max) config.worker.maxConcurrency = Math.max(1, Math.min(8, Math.trunc(options.max)));
@@ -71,7 +71,7 @@ export class SwarmService {
     if (options.model) config.worker.model = options.model;
     this.activeConfig = config;
     const runId = makeRunId();
-    const runsRoot = join(repoRoot, this.configDirName, "swarm", "runs");
+    const runsRoot = join(repoRoot, this.configDirName, "capstan", "runs");
     const runDir = join(runsRoot, runId);
     const store = new RunStore(runsRoot);
     const run = newRun(runId, runDir, repoRoot, task);
@@ -92,7 +92,7 @@ export class SwarmService {
         await addRunExclude(repoRoot, this.configDirName);
       }
       await store.save(run);
-      this.pi.appendEntry("swarm-run", { runId, phase: run.phase, task, runDir });
+      this.pi.appendEntry("capstan-run", { runId, phase: run.phase, task, runDir });
       const brief = await buildRepoBrief(repoRoot, task, config.planner.repoMapTokens * 4);
       const llm = new PiLlmClient(ctx as any, config, async (usage) => {
         addUsage(run.planning!.usage, usage);
@@ -115,13 +115,26 @@ export class SwarmService {
         run.phase = "done";
         run.outcome = "planned";
         await store.save(run);
-        ctx.ui.notify(`swarm: ${gate.reason}，已交回主会话`, "info");
+        ctx.ui.notify(`capstan: ${gate.reason}，已交回主会话`, "info");
         this.pi.sendUserMessage(task);
+        return;
+      }
+      if (!detectedRepoRoot && !options.planOnly) {
+        run.planning.endedAt = Date.now();
+        run.phase = "done";
+        run.outcome = "aborted";
+        await store.save(run);
+        ctx.ui.notify(
+          "Capstan executes inside a Git repository — worktree isolation and recovery depend on it.\n" +
+            "Fix: cd into your project or run `git init` first. (/capstan \"task\" --plan-only works anywhere)\n" +
+            "Capstan 需要在 Git 仓库中执行；--plan-only 模式无此要求。",
+          "warning",
+        );
         return;
       }
       run.phase = "planning";
       await store.save(run);
-      const caseStore = new CaseStore(join(this.agentDir, "swarm", "cases"), config.caseStore.max, config.caseStore.threshold, config.caseStore.matcher);
+      const caseStore = new CaseStore(join(this.agentDir, "capstan", "cases"), config.caseStore.max, config.caseStore.threshold, config.caseStore.matcher);
       const cases = config.caseStore.enabled ? await caseStore.match(task, brief) : [];
       const planned = await createPlan(task, brief, cases, llm, config);
       run.planning.endedAt = Date.now();
@@ -140,7 +153,7 @@ export class SwarmService {
         run.phase = "done";
         run.outcome = "planned";
         await store.save(run);
-        this.pi.sendMessage({ customType: "swarm-report", content: `# Swarm Plan · ${planned.taskSummary}\n\n\`\`\`json\n${JSON.stringify(planned, null, 2)}\n\`\`\``, display: true, details: { runId, planOnly: true } }, { deliverAs: "nextTurn" });
+        this.pi.sendMessage({ customType: "capstan-report", content: `# Capstan Plan · ${planned.taskSummary}\n\n\`\`\`json\n${JSON.stringify(planned, null, 2)}\n\`\`\``, display: true, details: { runId, planOnly: true } }, { deliverAs: "nextTurn" });
         return;
       }
       const reviewed = await reviewPlan(ctx, planned, gate, config.planner.maxSubtasks);
@@ -148,7 +161,7 @@ export class SwarmService {
         run.phase = "aborted";
         run.outcome = "aborted";
         await store.save(run);
-        ctx.ui.notify("已取消 swarm", "info");
+        ctx.ui.notify("已取消 capstan", "info");
         return;
       }
       run.plan = reviewed.plan;
@@ -170,7 +183,7 @@ export class SwarmService {
       const orchestrator = this.makeOrchestrator(run, config, store, brief, caseStore, ctx, repoLock);
       lockTransferred = Boolean(repoLock);
       this.activeOrchestrator = orchestrator;
-      ctx.ui.notify(`swarm ${runId} 已启动；/swarm board 查看`, "info");
+      ctx.ui.notify(`capstan ${runId} 已启动；/capstan board 查看`, "info");
       void orchestrator.execute(allowDirty).finally(() => {
         if (this.activeRun?.runId === runId) this.activeOrchestrator = undefined;
       });
@@ -188,20 +201,20 @@ export class SwarmService {
 
   async onSessionStart(ctx: ExtensionContext): Promise<void> {
     const repoRoot = await detectRepoRoot(ctx.cwd) ?? ctx.cwd;
-    const store = new RunStore(join(repoRoot, this.configDirName, "swarm", "runs"));
+    const store = new RunStore(join(repoRoot, this.configDirName, "capstan", "runs"));
     const config = await loadConfig(this.agentDir, repoRoot, this.configDirName);
     await pruneRunArtifacts(store.runsRoot, config.retention);
     const unfinished = (await store.list()).filter((run) => !["done", "aborted", "failed"].includes(run.phase) || (run.phase === "done" && run.partialSuccess));
-    if (store.diagnostics.length) ctx.ui.notify(`有 ${store.diagnostics.length} 个 swarm 状态损坏；请用运行目录中的 state.prev.json 排查`, "warning");
-    if (unfinished.length) ctx.ui.notify(`发现 ${unfinished.length} 个未完成 swarm run；使用 /swarm resume`, "warning");
+    if (store.diagnostics.length) ctx.ui.notify(`有 ${store.diagnostics.length} 个 capstan 状态损坏；请用运行目录中的 state.prev.json 排查`, "warning");
+    if (unfinished.length) ctx.ui.notify(`发现 ${unfinished.length} 个未完成 capstan run；使用 /capstan resume`, "warning");
   }
 
   async onSessionShutdown(): Promise<void> {
     await this.activeOrchestrator?.interrupt();
   }
 
-  private makeOrchestrator(run: SwarmRun, config: SwarmConfig, store: RunStore, brief: RepoBrief, caseStore: CaseStore, ctx: ExtensionContext, repoLock?: RepoLock): Orchestrator {
-    const workspace = new WorkspaceManager({ cwd: run.cwd, runId: run.runId, runDir: run.runDir, worktreesRoot: join(this.agentDir, "swarm", "worktrees") });
+  private makeOrchestrator(run: CapstanRun, config: CapstanConfig, store: RunStore, brief: RepoBrief, caseStore: CaseStore, ctx: ExtensionContext, repoLock?: RepoLock): Orchestrator {
+    const workspace = new WorkspaceManager({ cwd: run.cwd, runId: run.runId, runDir: run.runDir, worktreesRoot: join(this.agentDir, "capstan", "worktrees") });
     return new Orchestrator({
       run,
       config,
@@ -213,8 +226,8 @@ export class SwarmService {
         projectTrusted: ctx.isProjectTrusted(),
         onUpdate: (updated) => {
           this.activeRun = updated;
-          ctx.ui.setWidget("swarm", widgetLines(updated));
-          ctx.ui.setStatus("swarm", renderRunText(updated));
+          ctx.ui.setWidget("capstan", widgetLines(updated));
+          ctx.ui.setStatus("capstan", renderRunText(updated));
         },
         onUi: (_workerId, request) => routeUi(ctx, request),
         onUiBatch: async (requests) => {
@@ -232,10 +245,10 @@ export class SwarmService {
           return responses;
         },
         onLeadMessage: (workerId, message) => {
-          ctx.ui.notify(`Swarm 协调请求 · ${workerId}: ${message}\n如需调整计划，使用 /swarm replan。`, "warning");
+          ctx.ui.notify(`Capstan 协调请求 · ${workerId}: ${message}\n如需调整计划，使用 /capstan replan。`, "warning");
         },
         onBudget: async (workerId, message) => {
-          const choice = await ctx.ui.select(`Swarm 预算门 ${workerId}\n${message}`, ["增加 25% 并继续", "停止整个 run"]);
+          const choice = await ctx.ui.select(`Capstan 预算门 ${workerId}\n${message}`, ["增加 25% 并继续", "停止整个 run"]);
           return choice === "增加 25% 并继续" ? "extend" : "stop";
         },
         onBeforeReport: async (updated) => {
@@ -245,10 +258,10 @@ export class SwarmService {
           }
         },
         onReport: async (updated, report) => {
-          this.pi.sendMessage({ customType: "swarm-report", content: report, display: true, details: { runId: updated.runId, outcome: updated.outcome } }, { deliverAs: "nextTurn", triggerTurn: config.ui.reportTriggerTurn });
-          this.pi.appendEntry("swarm-run", { runId: updated.runId, phase: updated.phase, outcome: updated.outcome, reportPath: updated.reportPath });
-          ctx.ui.setWidget("swarm", undefined);
-          ctx.ui.setStatus("swarm", undefined);
+          this.pi.sendMessage({ customType: "capstan-report", content: report, display: true, details: { runId: updated.runId, outcome: updated.outcome } }, { deliverAs: "nextTurn", triggerTurn: config.ui.reportTriggerTurn });
+          this.pi.appendEntry("capstan-run", { runId: updated.runId, phase: updated.phase, outcome: updated.outcome, reportPath: updated.reportPath });
+          ctx.ui.setWidget("capstan", undefined);
+          ctx.ui.setStatus("capstan", undefined);
         },
       },
     });
@@ -273,19 +286,19 @@ export class SwarmService {
   }
 
   private async pause(ctx: ExtensionContext): Promise<void> {
-    if (!this.activeOrchestrator) return void ctx.ui.notify("没有活跃 swarm", "warning");
+    if (!this.activeOrchestrator) return void ctx.ui.notify("没有活跃 capstan", "warning");
     await this.activeOrchestrator.pause();
-    ctx.ui.notify("swarm 已暂停", "info");
+    ctx.ui.notify("capstan 已暂停", "info");
   }
 
   private async resume(ctx: ExtensionContext, runId?: string): Promise<void> {
     if (this.activeOrchestrator) {
       await this.activeOrchestrator.resume();
-      ctx.ui.notify("swarm 已继续", "info");
+      ctx.ui.notify("capstan 已继续", "info");
       return;
     }
     const repoRoot = await detectRepoRoot(ctx.cwd) ?? ctx.cwd;
-    const store = new RunStore(join(repoRoot, this.configDirName, "swarm", "runs"));
+    const store = new RunStore(join(repoRoot, this.configDirName, "capstan", "runs"));
     const runs = (await store.list()).filter((run) => Boolean(run.plan) && run.phase !== "aborted" && (run.phase !== "done" || run.partialSuccess));
     if (!runs.length) return void ctx.ui.notify("没有可恢复 run", "info");
     const selectedId = runId ?? (runs.length === 1 ? runs[0]!.runId : await ctx.ui.select("选择 run", runs.map((item) => item.runId)));
@@ -295,7 +308,7 @@ export class SwarmService {
     const config = await loadConfig(this.agentDir, repoRoot, this.configDirName);
     this.activeConfig = config;
     const brief = await buildRepoBrief(repoRoot, chosen.task, config.planner.repoMapTokens * 4);
-    const caseStore = new CaseStore(join(this.agentDir, "swarm", "cases"), config.caseStore.max, config.caseStore.threshold, config.caseStore.matcher);
+    const caseStore = new CaseStore(join(this.agentDir, "capstan", "cases"), config.caseStore.max, config.caseStore.threshold, config.caseStore.matcher);
     const repoLock = await RepoLock.forRepo(repoRoot, chosen.runId);
     await repoLock.acquire();
     let orchestrator: Orchestrator;
@@ -311,17 +324,17 @@ export class SwarmService {
   }
 
   private async abort(ctx: ExtensionContext): Promise<void> {
-    if (!this.activeOrchestrator) return void ctx.ui.notify("没有活跃 swarm", "warning");
-    if (await ctx.ui.confirm("终止 swarm", "停止所有 worker 并保留排障数据？")) await this.activeOrchestrator.abort();
+    if (!this.activeOrchestrator) return void ctx.ui.notify("没有活跃 capstan", "warning");
+    if (await ctx.ui.confirm("终止 capstan", "停止所有 worker 并保留排障数据？")) await this.activeOrchestrator.abort();
   }
 
   private async merge(ctx: ExtensionContext, runId?: string): Promise<void> {
     const repoRoot = await detectRepoRoot(ctx.cwd) ?? ctx.cwd;
-    const store = new RunStore(join(repoRoot, this.configDirName, "swarm", "runs"));
+    const store = new RunStore(join(repoRoot, this.configDirName, "capstan", "runs"));
     const run = runId ? await store.load(runId) : this.activeRun;
     if (!run?.git || (run.outcome !== "branch" && !run.merged.length)) return void ctx.ui.notify("没有可落地的 last-green branch 结果", "warning");
     const config = this.activeConfig ?? await loadConfig(this.agentDir, run.cwd, this.configDirName);
-    const workspace = new WorkspaceManager({ cwd: run.cwd, runId: run.runId, runDir: run.runDir, worktreesRoot: join(this.agentDir, "swarm", "worktrees") });
+    const workspace = new WorkspaceManager({ cwd: run.cwd, runId: run.runId, runDir: run.runDir, worktreesRoot: join(this.agentDir, "capstan", "worktrees") });
     workspace.restore(run.git);
     const lock = await RepoLock.forRepo(run.cwd, `merge-${run.runId}`);
     await lock.acquire();
@@ -338,12 +351,12 @@ export class SwarmService {
   private async replan(ctx: ExtensionContext): Promise<void> {
     const orchestrator = this.activeOrchestrator;
     const run = this.activeRun;
-    if (!orchestrator || !run?.plan) return void ctx.ui.notify("没有可重规划的活跃 swarm", "warning");
+    if (!orchestrator || !run?.plan) return void ctx.ui.notify("没有可重规划的活跃 capstan", "warning");
     await orchestrator.pause();
     try {
       const edited = await ctx.ui.editor("运行中重规划（已启动任务的目标/依赖/作用域不可修改）", JSON.stringify(run.plan, null, 2));
       if (!edited) return;
-      const plan = JSON.parse(edited) as SwarmPlan;
+      const plan = JSON.parse(edited) as CapstanPlan;
       const validation = validatePlan(plan, orchestrator.config.planner.maxSubtasks);
       if (!validation.ok) throw new Error(`重规划校验失败: ${validation.errors.join("; ")}`);
       await orchestrator.replacePlan(plan);
@@ -356,9 +369,9 @@ export class SwarmService {
   private async createPullRequest(ctx: ExtensionContext, runId?: string): Promise<void> {
     const repoRoot = await detectRepoRoot(ctx.cwd);
     if (!repoRoot) return void ctx.ui.notify("非 Git 仓库", "warning");
-    const store = new RunStore(join(repoRoot, this.configDirName, "swarm", "runs"));
+    const store = new RunStore(join(repoRoot, this.configDirName, "capstan", "runs"));
     const run = runId ? await store.load(runId) : this.activeRun;
-    if (!run?.git || !run.merged.length) return void ctx.ui.notify("没有可发布的 last-green swarm branch", "warning");
+    if (!run?.git || !run.merged.length) return void ctx.ui.notify("没有可发布的 last-green capstan branch", "warning");
     const branch = run.git.integrationBranch;
     if (!(await ctx.ui.confirm("创建 GitHub Pull Request", `将 ${branch} 推送到 origin，并创建不包含本地日志/报告正文的 PR？`))) return;
     const lock = await RepoLock.forRepo(repoRoot, `pr-${run.runId}`);
@@ -366,8 +379,8 @@ export class SwarmService {
     try {
       const pushed = await runCommand("git", ["push", "--set-upstream", "origin", branch], { cwd: repoRoot, timeoutMs: 120_000 });
       if (pushed.exitCode !== 0) throw new Error(`git push 失败: ${pushed.stderr || pushed.stdout}`);
-      const title = `swarm: verified run ${run.runId}`;
-      const body = `Pi Swarm run ${run.runId}.\n\nMerged verified subtasks: ${run.merged.join(", ")}.\nResult: ${run.partialSuccess ? "partial; failed dependencies excluded" : "complete"}.\n\nLocal RPC logs, sessions, and reports were not uploaded by this command.`;
+      const title = `capstan: verified run ${run.runId}`;
+      const body = `Pi Capstan run ${run.runId}.\n\nMerged verified subtasks: ${run.merged.join(", ")}.\nResult: ${run.partialSuccess ? "partial; failed dependencies excluded" : "complete"}.\n\nLocal RPC logs, sessions, and reports were not uploaded by this command.`;
       const created = await runCommand("gh", ["pr", "create", "--head", branch, "--title", title, "--body", body], { cwd: repoRoot, timeoutMs: 120_000 });
       if (created.exitCode !== 0) throw new Error(`gh pr create 失败: ${created.stderr || created.stdout}`);
       run.prUrl = created.stdout.trim().split("\n").find((line) => /^https:\/\//.test(line));
@@ -381,13 +394,13 @@ export class SwarmService {
   private async clean(ctx: ExtensionContext): Promise<void> {
     const repoRoot = await detectRepoRoot(ctx.cwd);
     if (!repoRoot) return void ctx.ui.notify("非 Git 仓库", "warning");
-    const store = new RunStore(join(repoRoot, this.configDirName, "swarm", "runs"));
+    const store = new RunStore(join(repoRoot, this.configDirName, "capstan", "runs"));
     const runs = (await store.list()).filter((run) => ["done", "failed", "aborted"].includes(run.phase) && run.git);
     if (!runs.length) return void ctx.ui.notify("没有可清理 run", "info");
     const id = await ctx.ui.select("选择要清理的 run", runs.map((run) => run.runId));
     const run = runs.find((item) => item.runId === id);
-    if (!run || !(await ctx.ui.confirm("确认清理", `移除 ${run.runId} 的 worktree 和 swarm 分支？运行日志保留。`))) return;
-    const workspace = new WorkspaceManager({ cwd: repoRoot, runId: run.runId, runDir: run.runDir, worktreesRoot: join(this.agentDir, "swarm", "worktrees") });
+    if (!run || !(await ctx.ui.confirm("确认清理", `移除 ${run.runId} 的 worktree 和 capstan 分支？运行日志保留。`))) return;
+    const workspace = new WorkspaceManager({ cwd: repoRoot, runId: run.runId, runDir: run.runDir, worktreesRoot: join(this.agentDir, "capstan", "worktrees") });
     workspace.restore(run.git!);
     await workspace.cleanupWorktrees(false);
     ctx.ui.notify("已清理 worktree 与分支；日志仍可回放", "info");
@@ -395,7 +408,7 @@ export class SwarmService {
 
   private async cases(ctx: ExtensionContext, args: string[]): Promise<void> {
     const config = this.activeConfig ?? await loadConfig(this.agentDir, ctx.cwd, this.configDirName);
-    const store = new CaseStore(join(this.agentDir, "swarm", "cases"), config.caseStore.max, config.caseStore.threshold, config.caseStore.matcher);
+    const store = new CaseStore(join(this.agentDir, "capstan", "cases"), config.caseStore.max, config.caseStore.threshold, config.caseStore.matcher);
     if (args[0] === "rate" && args[1]) {
       const rating = args[2] === "+1" ? 1 : args[2] === "-1" ? -1 : 0;
       await store.rate(args[1], rating);
@@ -411,11 +424,11 @@ export class SwarmService {
 
   private async replay(ctx: ExtensionContext, runId?: string): Promise<void> {
     const repoRoot = await detectRepoRoot(ctx.cwd) ?? ctx.cwd;
-    const store = new RunStore(join(repoRoot, this.configDirName, "swarm", "runs"));
+    const store = new RunStore(join(repoRoot, this.configDirName, "capstan", "runs"));
     const run = runId ? await store.load(runId) : (await store.list())[0];
     if (!run) return void ctx.ui.notify("未找到 run", "warning");
     const report = run.reportPath && await pathExists(run.reportPath) ? await readFile(run.reportPath, "utf8") : JSON.stringify(run, null, 2);
-    this.pi.sendMessage({ customType: "swarm-report", content: report, display: true, details: { runId: run.runId, replay: true } }, { deliverAs: "nextTurn" });
+    this.pi.sendMessage({ customType: "capstan-report", content: report, display: true, details: { runId: run.runId, replay: true } }, { deliverAs: "nextTurn" });
   }
 
   private async configure(ctx: ExtensionContext): Promise<void> {
@@ -427,10 +440,10 @@ export class SwarmService {
     if (useWizard) return this.configureWithWizard(ctx, repoRoot);
 
     const config = await loadConfig(this.agentDir, repoRoot, this.configDirName);
-    const edited = await ctx.ui.editor("Project Swarm config", JSON.stringify(config, null, 2));
+    const edited = await ctx.ui.editor("Project Capstan config", JSON.stringify(config, null, 2));
     if (!edited) return;
     JSON.parse(edited);
-    const path = join(repoRoot, this.configDirName, "swarm.json");
+    const path = join(repoRoot, this.configDirName, "capstan.json");
     await ensurePrivateDir(join(repoRoot, this.configDirName));
     await writeFile(path, `${edited.trim()}\n`, { mode: 0o600 });
     ctx.ui.notify(`Wrote ${path}`, "info");
@@ -438,7 +451,7 @@ export class SwarmService {
 
   private async configureWithWizard(ctx: ExtensionContext, repoRoot: string): Promise<void> {
     ctx.ui.notify("Configuration wizard — edit the template, keep one option per section.", "info");
-    const questionsText = `# Pi-Swarm configuration wizard
+    const questionsText = `# Pi-Capstan configuration wizard
 
 Keep one choice per section (delete the others).
 
@@ -495,10 +508,10 @@ maxBudget: 20
       ctx.ui.notify("Cancelled", "info");
       return;
     }
-    const configPath = join(repoRoot, this.configDirName, "swarm.json");
+    const configPath = join(repoRoot, this.configDirName, "capstan.json");
     await ensurePrivateDir(join(repoRoot, this.configDirName));
     writeConfigWithComments(configPath, config, answers);
-    ctx.ui.notify(`Saved ${configPath}\nSee docs/CONFIGURATION.md and docs/examples/TEMPLATES.md`, "info");
+    ctx.ui.notify(`Saved ${configPath}\nDocs: ${DOCS_BASE_URL}/CONFIGURATION.md · Templates: ${DOCS_BASE_URL}/examples/TEMPLATES.md`, "info");
   }
 
   private async analyzeRuns(ctx: ExtensionContext, args: string[]): Promise<void> {
@@ -506,17 +519,17 @@ maxBudget: 20
     const limitFlag = args.findIndex((arg) => arg === "--limit");
     const limit = limitFlag >= 0 ? Math.max(1, Number(args[limitFlag + 1]) || 50) : 50;
     const wantRecommendations = args.includes("--recommendations") || !args.includes("--summary-only");
-    const analyzer = new RunAnalyzer(join(repoRoot, this.configDirName, "swarm", "runs"));
+    const analyzer = new RunAnalyzer(join(repoRoot, this.configDirName, "capstan", "runs"));
     const summaries = await analyzer.loadRunHistory(limit);
     if (!summaries.length) {
-      ctx.ui.notify("No swarm runs found to analyze.", "warning");
+      ctx.ui.notify("No capstan runs found to analyze.", "warning");
       return;
     }
     const trends = await analyzer.analyzeTrends(summaries);
     const recommendations = wantRecommendations ? await analyzer.getRecommendations(trends) : [];
     const report = analyzer.formatReport(summaries, trends, recommendations);
     this.pi.sendMessage(
-      { customType: "swarm-report", content: report, display: true, details: { analyze: true } },
+      { customType: "capstan-report", content: report, display: true, details: { analyze: true } },
       { deliverAs: "nextTurn" },
     );
     ctx.ui.notify(`Analyzed ${summaries.length} run(s). Report injected into the session.`, "info");
@@ -541,7 +554,7 @@ maxBudget: 20
 
           const edited = await ctx.ui.editor("查看修复后的配置", JSON.stringify(fixed, null, 2));
           if (edited) {
-            const path = join(repoRoot, this.configDirName, "swarm.json");
+            const path = join(repoRoot, this.configDirName, "capstan.json");
             await ensurePrivateDir(join(repoRoot, this.configDirName));
             await writeFile(path, `${edited.trim()}\n`, { mode: 0o600 });
             ctx.ui.notify(`已写入 ${path}`, "info");
@@ -554,11 +567,20 @@ maxBudget: 20
   }
 
   private help(ctx: ExtensionContext): void {
-    ctx.ui.notify("/swarm <task> [--force --plan-only --max N --budget USD --best-of N --model provider/id]\n/swarm board|pause|resume [runId]|abort|merge [runId]|pr [runId]|replan|clean|cases|replay|config|validate|analyze|status", "info");
+    ctx.ui.notify(
+      "Capstan — parallel coding agents under your control\n\n" +
+        "Start:   /capstan \"implement X\"      you approve the plan before anything runs\n" +
+        "Control: /capstan board | pause | resume | abort\n" +
+        "Land:    /capstan merge | pr          merge the integration branch or open a PR\n" +
+        "Tune:    /capstan config | validate   optional — safe defaults are already on\n" +
+        "More:    /capstan replan | clean | cases | replay | analyze\n" +
+        "Flags:   --force --solo --plan-only --max N --budget USD --best-of N --model provider/id\n" +
+        "Docs:    https://github.com/Yongthyuan/pi-capstan/tree/main/docs",
+    "info");
   }
 }
 
-function newRun(runId: string, runDir: string, cwd: string, task: string, gate?: any, plan?: SwarmPlan): SwarmRun {
+function newRun(runId: string, runDir: string, cwd: string, task: string, gate?: any, plan?: CapstanPlan): CapstanRun {
   return {
     schemaVersion: 1,
     runId,
@@ -589,7 +611,7 @@ async function addRunExclude(repoRoot: string, configDirName: string): Promise<v
   if (!gitPath) return;
   const path = isAbsolute(gitPath) ? gitPath : join(repoRoot, gitPath);
   await ensurePrivateDir(dirname(path));
-  const line = `/${configDirName}/swarm/`;
+  const line = `/${configDirName}/capstan/`;
   const current = await pathExists(path) ? await readFile(path, "utf8") : "";
   if (!current.split("\n").includes(line)) await appendFile(path, `${current.endsWith("\n") || !current ? "" : "\n"}${line}\n`);
 }

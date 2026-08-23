@@ -7,13 +7,13 @@ import { RunStore } from "../src/state.ts";
 import { emptyUsage, runCommand } from "../src/utils.ts";
 import { WorkspaceManager } from "../src/workspace.ts";
 
-const model = process.env.PI_SWARM_TEST_MODEL;
-if (!model) throw new Error("PI_SWARM_TEST_MODEL is required, for example github-copilot-edu/gpt-4o-mini");
+const model = process.env.PI_CAPSTAN_TEST_MODEL;
+if (!model) throw new Error("PI_CAPSTAN_TEST_MODEL is required, for example github-copilot-edu/gpt-4o-mini");
 
-const root = await mkdtemp(join(tmpdir(), "pi-swarm-model-"));
+const root = await mkdtemp(join(tmpdir(), "pi-capstan-model-"));
 const repo = join(root, "repo");
 const runId = "native-model";
-const runDir = join(repo, ".pi", "swarm", "runs", runId);
+const runDir = join(repo, ".pi", "capstan", "runs", runId);
 await mkdir(repo, { recursive: true });
 
 async function git(args) {
@@ -26,7 +26,7 @@ try {
   await writeFile(join(repo, "README.md"), "# Native model smoke\n");
   await git(["init", "-q"]);
   await git(["config", "user.email", "test@example.invalid"]);
-  await git(["config", "user.name", "Pi Swarm Test"]);
+  await git(["config", "user.name", "Pi Capstan Test"]);
   await git(["add", "README.md"]);
   await git(["commit", "-qm", "initial"]);
 
@@ -94,7 +94,7 @@ try {
   config.run.verify.full = [];
   config.run.mergeStrategy = "branch";
 
-  const store = new RunStore(join(repo, ".pi", "swarm", "runs"));
+  const store = new RunStore(join(repo, ".pi", "capstan", "runs"));
   const orchestrator = new Orchestrator({
     run,
     config,
@@ -111,11 +111,11 @@ try {
   });
   await orchestrator.execute(false);
   if (run.phase !== "done") throw new Error(`native model run failed: ${run.error ?? run.phase}`);
-  const branch = `swarm/${runId}/integration`;
+  const branch = `capstan/${runId}/integration`;
   const alpha = await git(["show", `${branch}:alpha.txt`]);
   const beta = await git(["show", `${branch}:beta.txt`]);
   if (alpha !== "alpha" || beta !== "beta") throw new Error(`unexpected branch contents: alpha=${JSON.stringify(alpha)} beta=${JSON.stringify(beta)}`);
-  process.stdout.write(`native provider-backed swarm ok: ${model}, turns=${run.totals.turns}, tokens=${run.totals.input + run.totals.output}\n`);
+  process.stdout.write(`native provider-backed capstan ok: ${model}, turns=${run.totals.turns}, tokens=${run.totals.input + run.totals.output}\n`);
 } finally {
   await rm(root, { recursive: true, force: true });
 }

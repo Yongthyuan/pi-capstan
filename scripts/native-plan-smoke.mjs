@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runCommand } from "../src/utils.ts";
 
-const model = process.env.PI_SWARM_TEST_MODEL;
-if (!model) throw new Error("PI_SWARM_TEST_MODEL is required");
+const model = process.env.PI_CAPSTAN_TEST_MODEL;
+if (!model) throw new Error("PI_CAPSTAN_TEST_MODEL is required");
 
-const root = await mkdtemp(join(tmpdir(), "pi-swarm-plan-"));
+const root = await mkdtemp(join(tmpdir(), "pi-capstan-plan-"));
 const repo = join(root, "repo");
 const sessions = join(root, "sessions");
 await mkdir(repo, { recursive: true });
@@ -22,14 +22,14 @@ let child;
 try {
   await writeFile(join(repo, "README.md"), "# Planner smoke\n\nThe repository intentionally has two independent requested marker files.\n");
   await mkdir(join(repo, ".pi"), { recursive: true });
-  await writeFile(join(repo, ".pi", "swarm.json"), `${JSON.stringify({ run: { verifyAllowedPrefixes: ["true"] } }, null, 2)}\n`);
+  await writeFile(join(repo, ".pi", "capstan.json"), `${JSON.stringify({ run: { verifyAllowedPrefixes: ["true"] } }, null, 2)}\n`);
   await git(["init", "-q"]);
   await git(["config", "user.email", "test@example.invalid"]);
-  await git(["config", "user.name", "Pi Swarm Test"]);
-  await git(["add", "README.md", ".pi/swarm.json"]);
+  await git(["config", "user.name", "Pi Capstan Test"]);
+  await git(["add", "README.md", ".pi/capstan.json"]);
   await git(["commit", "-qm", "initial"]);
 
-  child = spawn(process.env.PI_SWARM_PI_BIN ?? "pi", [
+  child = spawn(process.env.PI_CAPSTAN_PI_BIN ?? "pi", [
     "--mode", "rpc",
     "--model", model,
     "--session-dir", sessions,
@@ -69,15 +69,15 @@ try {
     child.stdin.write(`${JSON.stringify(payload)}\n`);
   });
   const commands = await request({ id: "commands", type: "get_commands" });
-  if (!commands.success || !commands.data.commands.some((item) => item.name === "swarm")) throw new Error("swarm command was not registered");
+  if (!commands.success || !commands.data.commands.some((item) => item.name === "capstan")) throw new Error("capstan command was not registered");
   const prompt = await request({
     id: "plan",
     type: "prompt",
-    message: "/swarm \"Create alpha.txt and beta.txt as two fully independent worker tasks. Each task owns only its exact file and uses true as its acceptance command.\" --force --plan-only",
+    message: "/capstan \"Create alpha.txt and beta.txt as two fully independent worker tasks. Each task owns only its exact file and uses true as its acceptance command.\" --force --plan-only",
   });
   if (!prompt.success) throw new Error(`plan command failed: ${JSON.stringify(prompt)}`);
 
-  const runsRoot = join(repo, ".pi", "swarm", "runs");
+  const runsRoot = join(repo, ".pi", "capstan", "runs");
   const deadline = Date.now() + 120_000;
   let state;
   while (!state) {

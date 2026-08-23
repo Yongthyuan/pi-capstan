@@ -1,6 +1,6 @@
 import { copyFile, readdir, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
-import type { RunPhase, SwarmRun } from "./types.ts";
+import type { RunPhase, CapstanRun } from "./types.ts";
 import { atomicWriteJson, ensurePrivateDir, pathExists } from "./utils.ts";
 
 const TERMINAL_PHASES = new Set<RunPhase>(["done", "aborted", "failed"]);
@@ -21,7 +21,7 @@ export class RunStore {
     return join(this.runDir(runId), "state.json");
   }
 
-  async save(run: SwarmRun): Promise<void> {
+  async save(run: CapstanRun): Promise<void> {
     run.updatedAt = Date.now();
     await ensurePrivateDir(run.runDir);
     if (await pathExists(this.statePath(run.runId))) {
@@ -35,7 +35,7 @@ export class RunStore {
     await atomicWriteJson(this.statePath(run.runId), run);
   }
 
-  async load(runId: string): Promise<SwarmRun> {
+  async load(runId: string): Promise<CapstanRun> {
     try {
       return migrateRun(JSON.parse(await readFile(this.statePath(runId), "utf8")));
     } catch (primaryError) {
@@ -50,11 +50,11 @@ export class RunStore {
     }
   }
 
-  async list(): Promise<SwarmRun[]> {
+  async list(): Promise<CapstanRun[]> {
     this.diagnostics.length = 0;
     if (!(await pathExists(this.runsRoot))) return [];
     const entries = await readdir(this.runsRoot, { withFileTypes: true });
-    const runs: SwarmRun[] = [];
+    const runs: CapstanRun[] = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       try {
@@ -66,12 +66,12 @@ export class RunStore {
     return runs.sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
-  async unfinished(): Promise<SwarmRun[]> {
+  async unfinished(): Promise<CapstanRun[]> {
     return (await this.list()).filter((run) => !TERMINAL_PHASES.has(run.phase));
   }
 }
 
-function migrateRun(value: any): SwarmRun {
+function migrateRun(value: any): CapstanRun {
   if (!value || typeof value !== "object") throw new Error("state 不是对象");
   if (value.schemaVersion !== 1) throw new Error(`不支持 state schemaVersion ${String(value.schemaVersion)}`);
   if (typeof value.runId !== "string" || typeof value.runDir !== "string") throw new Error("state 缺少 runId/runDir");
@@ -94,7 +94,7 @@ function migrateRun(value: any): SwarmRun {
     worker.revertedScopePaths ??= [];
     worker.mailboxOffset ??= 0;
   }
-  return value as SwarmRun;
+  return value as CapstanRun;
 }
 
 export function isTerminalPhase(phase: RunPhase): boolean {

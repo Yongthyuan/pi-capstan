@@ -1,6 +1,6 @@
 import { readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { CaseRecord, SwarmPlan, SwarmRun } from "./types.ts";
+import type { CaseRecord, CapstanPlan, CapstanRun } from "./types.ts";
 import { atomicWriteJson, ensurePrivateDir, jaccard, makeRunId, pathExists, tokenizeTask } from "./utils.ts";
 import type { RepoBrief } from "./planner.ts";
 
@@ -46,7 +46,7 @@ export class CaseStore {
     return [...positive, ...negative].map((item) => item.record);
   }
 
-  async record(run: SwarmRun, brief: RepoBrief): Promise<CaseRecord | undefined> {
+  async record(run: CapstanRun, brief: RepoBrief): Promise<CaseRecord | undefined> {
     if (!run.plan || !run.outcome || run.outcome === "planned") return undefined;
     await ensurePrivateDir(this.root);
     const record = buildCaseRecord(run, run.plan, brief);
@@ -91,7 +91,7 @@ function trigramSimilarity(left: string, right: string): number {
   return jaccard(grams(left), grams(right));
 }
 
-function buildCaseRecord(run: SwarmRun, plan: SwarmPlan, brief: RepoBrief): CaseRecord {
+function buildCaseRecord(run: CapstanRun, plan: CapstanPlan, brief: RepoBrief): CaseRecord {
   const retries = Object.values(run.workers).reduce((sum, worker) => sum + worker.retries, 0);
   const workers = Object.values(run.workers);
   const implicit = (run.planEdits.length === 0 ? 1 : 0) + (workers.every((worker) => worker.retries === 0) ? 1 : 0) + (run.conflicts.length === 0 ? 0.5 : 0) + (run.outcome === "failed" || run.outcome === "aborted" ? -2 : 0.5);
@@ -139,7 +139,7 @@ function safeId(id: string): string {
   return id;
 }
 
-function countWaves(plan: SwarmPlan): number {
+function countWaves(plan: CapstanPlan): number {
   const depth = new Map<string, number>();
   for (const id of plan.mergeOrder) {
     const task = plan.subtasks.find((item) => item.id === id)!;
@@ -148,7 +148,7 @@ function countWaves(plan: SwarmPlan): number {
   return Math.max(0, ...depth.values());
 }
 
-function describeDag(plan: SwarmPlan): string {
+function describeDag(plan: CapstanPlan): string {
   const waves = countWaves(plan);
   return `${plan.subtasks.length} tasks/${waves} waves`;
 }

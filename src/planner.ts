@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
-import type { CaseRecord, SwarmConfig, SwarmPlan } from "./types.ts";
+import type { CaseRecord, CapstanConfig, CapstanPlan } from "./types.ts";
 import { validatePlan } from "./plan-validation.ts";
 import { readTextIfPresent, runCommand, tokenizeTask, truncateTail } from "./utils.ts";
 import { JsonResponseError, type PiLlmClient } from "./llm.ts";
@@ -187,7 +187,7 @@ export function plannerPrompt(task: string, brief: RepoBrief, cases: CaseRecord[
   const prior = cases.length
     ? `\nPrior decompositions (treat negative examples as patterns to avoid):\n${cases.map((item) => `- [${item.rating.explicit * 2 + item.rating.implicit < 0 ? "negative" : "positive"}] ${item.taskText}: ${item.strategy}; roles=${item.planSkeleton.roles.join(",")}; outcome=${item.outcome}; score=${item.rating.explicit * 2 + item.rating.implicit}`).join("\n")}`
     : "";
-  return `You are the team-lead planner of a coding-agent swarm. Create an evidence-grounded plan for independent workers in isolated git worktrees.
+  return `You are the team-lead planner of a coding-agent capstan. Create an evidence-grounded plan for independent workers in isolated git worktrees.
 
 TASK
 ${task}
@@ -226,10 +226,10 @@ export async function createPlan(
   brief: RepoBrief,
   cases: CaseRecord[],
   llm: PiLlmClient,
-  config: SwarmConfig,
-): Promise<SwarmPlan | { recommend: "solo"; reason: string }> {
+  config: CapstanConfig,
+): Promise<CapstanPlan | { recommend: "solo"; reason: string }> {
   const prompt = plannerPrompt(task, brief, cases, config.planner.maxSubtasks, llm.availableModels().map((model) => `${model.provider}/${model.id}`), config.run.verifyAllowedPrefixes);
-  let result: SwarmPlan | { recommend: "solo"; reason: string } | undefined;
+  let result: CapstanPlan | { recommend: "solo"; reason: string } | undefined;
   let repairRaw = "";
   let repairErrors: string[] = [];
   for (let attempt = 0; attempt <= config.planner.schemaRetries; attempt++) {

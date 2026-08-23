@@ -1,6 +1,6 @@
 # Capstan Documentation Index
 
-> **For Claude**: Read [FOR_CLAUDE.md](./FOR_CLAUDE.md) first for a complete guide on how to use these docs to generate configurations and customize swarm behavior.
+> **For Claude**: Read [FOR_CLAUDE.md](./FOR_CLAUDE.md) first for a complete guide on how to use these docs to generate configurations and customize capstan behavior.
 
 ## Quick Links
 
@@ -13,7 +13,7 @@
 
 ## What is Capstan?
 
-**Capstan** (formerly **pi-agent-swarm**) is a native multi-agent swarm extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). It is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm). It orchestrates decomposable same-repo coding tasks by:
+**Capstan** (formerly **pi-agent-swarm**) is a native multi-agent coding extension for [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent). It is **not** [`@gjczone/pi-swarm`](https://pi.dev/packages/@gjczone/pi-swarm). It orchestrates decomposable same-repo coding tasks by:
 
 1. **Complexity Gating** - Simple tasks bounce back to the main session
 2. **Evidence-Based Planning** - Reads your codebase and generates a DAG plan
@@ -35,7 +35,7 @@ Capstan follows Pi's minimalist philosophy:
 
 ## For Claude: How to Use This Documentation
 
-When a user asks you to customize or extend swarm:
+When a user asks you to customize or extend capstan:
 
 ### Step 1: Understand Their Goal
 
@@ -67,7 +67,7 @@ Ask clarifying questions:
 
 ### Step 4: Test & Iterate
 
-1. Use `/swarm` command to test
+1. Use `/capstan` command to test
 2. Observe results in dashboard
 3. Adjust based on feedback
 4. Document learnings for next time
@@ -101,9 +101,9 @@ User: "Workers 需要查询项目数据库来获取 schema 信息"
 
 **Your approach**:
 1. Read EXTENSION_POINTS.md → "Custom Guard Extensions"
-2. Create `~/.pi/agent/extensions/db-tools.ts` with `swarm_query_db` tool
-3. Configure `safetyGuardPath` in swarm.json
-4. Explain: "每个 worker 现在可以用 swarm_query_db 工具直接查询数据库"
+2. Create `~/.pi/agent/extensions/db-tools.ts` with `capstan_query_db` tool
+3. Configure `safetyGuardPath` in capstan.json
+4. Explain: "每个 worker 现在可以用 capstan_query_db 工具直接查询数据库"
 
 ### Use Case 4: Untrusted Repository
 
@@ -138,39 +138,39 @@ User: "在一个不熟悉的项目上试验，要最大安全性"
 | Custom validation | Custom guard (tool_call hook) | ✅ Available |
 | Incremental tests | Optional `run.verificationStrategy` file path | Worker lane only |
 | Dynamic parallelism | Optional `run.schedulingStrategy` | Changes concurrency, not DAG order |
-| Worker sync primitives | `swarm_send` / `swarm_inbox` | Collaboration plugins do not inject tools |
+| Worker sync primitives | `capstan_send` / `capstan_inbox` | Collaboration plugins do not inject tools |
 | Reusable patterns | Copy `examples/configs/*` | No task template runtime |
 
 ## Command Quick Reference
 
 ```bash
 # Basic usage
-/swarm "实现 OAuth 登录功能"
+/capstan "实现 OAuth 登录功能"
 
 # With overrides
-/swarm "task" --max 8 --budget 20 --model anthropic/claude-opus-4
+/capstan "task" --max 8 --budget 20 --model anthropic/claude-opus-4
 
 # Quality mode
-/swarm "task" --best-of 3
+/capstan "task" --best-of 3
 
 # Planning only (review before executing)
-/swarm "task" --plan-only
+/capstan "task" --plan-only
 
-# Force swarm (skip complexity gate)
-/swarm "task" --force
+# Force capstan (skip complexity gate)
+/capstan "task" --force
 
-# Solo mode (pass to main agent, no swarm)
-/swarm "task" --solo
+# Solo mode (pass to main agent, no capstan)
+/capstan "task" --solo
 
 # Management commands
-/swarm board              # Open dashboard
-/swarm pause              # Pause active run
-/swarm resume [runId]     # Resume paused/interrupted run
-/swarm abort              # Abort active run
-/swarm merge [runId]      # Manually merge completed run
-/swarm pr [runId]         # Create pull request
-/swarm cases              # List case library
-/swarm config             # Generate project config template
+/capstan board              # Open dashboard
+/capstan pause              # Pause active run
+/capstan resume [runId]     # Resume paused/interrupted run
+/capstan abort              # Abort active run
+/capstan merge [runId]      # Manually merge completed run
+/capstan pr [runId]         # Create pull request
+/capstan cases              # List case library
+/capstan config             # Generate project config template
 ```
 
 ## Architecture Overview
@@ -178,11 +178,11 @@ User: "在一个不熟悉的项目上试验，要最大安全性"
 ```
 User
   ↓
-/swarm "task"
+/capstan "task"
   ↓
 Gate (Simple? → Pass to main agent)
   ↓
-Planner (Repo map + Cases → SwarmPlan)
+Planner (Repo map + Cases → CapstanPlan)
   ↓
 User Reviews Plan
   ↓
@@ -217,13 +217,13 @@ Compared to other multi-agent frameworks:
 
 1. **Read the docs** - CONFIGURATION.md and EXTENSION_POINTS.md cover 95% of use cases
 2. **Check examples** - See "Common Configuration Patterns" in CONFIGURATION.md
-3. **Inspect state** - Use `/swarm board` to see live status
-4. **Review logs** - Check `<repo>/.pi/swarm/runs/<runId>/` (`state.json`, RPC logs)
-5. **Case library** - Use `/swarm cases` to see learned patterns
+3. **Inspect state** - Use `/capstan board` to see live status
+4. **Review logs** - Check `<repo>/.pi/capstan/runs/<runId>/` (`state.json`, RPC logs)
+5. **Case library** - Use `/capstan cases` to see learned patterns
 
 ## Version
 
-Current: **v0.8.0**
+Current: **v0.10.0**
 
 Compatibility: Pi coding agent `>=0.84.1`
 

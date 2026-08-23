@@ -12,13 +12,13 @@ import { emptyUsage, runCommand } from "../src/utils.ts";
 import { sanitizeRpcLogLine } from "../src/worker.ts";
 
 test("repository lock rejects a second Pi process owner and releases cleanly", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-lock-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-lock-"));
   try {
     await runCommand("git", ["init", "-q"], { cwd: root });
     const first = await RepoLock.forRepo(root, "first");
     const second = await RepoLock.forRepo(root, "second");
     await first.acquire();
-    await assert.rejects(second.acquire(), /已有活跃 swarm run first/);
+    await assert.rejects(second.acquire(), /已有活跃 capstan run first/);
     await first.release();
     await second.acquire();
     await second.release();
@@ -28,7 +28,7 @@ test("repository lock rejects a second Pi process owner and releases cleanly", a
 });
 
 test("run store recovers from the previous atomic state and reports unrecoverable corruption", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-state-backup-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-state-backup-"));
   try {
     const store = new RunStore(root);
     const run: any = { schemaVersion: 1, runId: "r1", createdAt: 1, updatedAt: 1, cwd: root, task: "task", phase: "executing", planEdits: [], workers: {}, merged: [], conflicts: [], totals: { ...emptyUsage(), wallSec: 0, turns: 0 }, runDir: join(root, "r1") };
@@ -46,7 +46,7 @@ test("run store recovers from the previous atomic state and reports unrecoverabl
 });
 
 test("repo brief includes untracked content evidence with source line numbers", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-scout-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-scout-"));
   const originalPath = process.env.PATH;
   try {
     await runCommand("git", ["init", "-q"], { cwd: root });
@@ -69,7 +69,7 @@ test("repo brief includes untracked content evidence with source line numbers", 
 });
 
 test("repo brief expands task hits through import and test/source neighborhoods", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-structural-scout-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-structural-scout-"));
   try {
     await runCommand("git", ["init", "-q"], { cwd: root });
     await mkdir(join(root, "src"), { recursive: true });

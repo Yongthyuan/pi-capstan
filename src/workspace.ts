@@ -1,7 +1,7 @@
 import { appendFile, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import type { GitMergeOperation, GitRunState, MergeStrategy, Subtask, SwarmRun } from "./types.ts";
+import type { GitMergeOperation, GitRunState, MergeStrategy, Subtask, CapstanRun } from "./types.ts";
 import { ensurePrivateDir, matchesAnyGlob, pathExists, runCommand, sha256, truncateTail } from "./utils.ts";
 
 export interface WorkspaceOptions {
@@ -52,7 +52,7 @@ export class WorkspaceManager {
     const root = join(this.worktreesRoot, sha256(repoRoot).slice(0, 12), this.runId);
     await ensurePrivateDir(root);
     const integrationWorktree = join(root, "integration");
-    const integrationBranch = `swarm/${this.runId}/integration`;
+    const integrationBranch = `capstan/${this.runId}/integration`;
     await this.mustGit(repoRoot, ["worktree", "add", "-b", integrationBranch, integrationWorktree, baseCommit]);
     this.git = {
       repoRoot,
@@ -85,7 +85,7 @@ export class WorkspaceManager {
     return this.runExclusiveWorktreeMutation(async () => {
       const git = this.requireGit();
       const path = join(dirname(git.integrationWorktree), task.id);
-      const branch = `swarm/${this.runId}/${task.id}`;
+      const branch = `capstan/${this.runId}/${task.id}`;
       if (await this.isWorktree(path)) return { path, branch };
       if (await pathExists(path)) throw new Error(`worker 路径存在但不是有效 worktree: ${path}`);
       await this.gitCommand(git.repoRoot, ["worktree", "prune"]);
@@ -137,7 +137,7 @@ export class WorkspaceManager {
       names = (await this.mustGit(worktree, ["diff", "--cached", "--name-only", "--diff-filter=ACMRD"])).split("\n").filter(Boolean);
     }
     if (names.length === 0) return { commit: (await this.mustGit(worktree, ["rev-parse", "HEAD"])).trim(), files: [], reverted: outside };
-    await this.mustGit(worktree, ["-c", "user.name=Pi Swarm", "-c", "user.email=pi-swarm@local.invalid", "commit", "-m", `swarm(${task.id}): ${task.title}`]);
+    await this.mustGit(worktree, ["-c", "user.name=Pi Capstan", "-c", "user.email=pi-capstan@local.invalid", "commit", "-m", `capstan(${task.id}): ${task.title}`]);
     return { commit: (await this.mustGit(worktree, ["rev-parse", "HEAD"])).trim(), files: names, reverted: outside };
   }
 
@@ -145,7 +145,7 @@ export class WorkspaceManager {
     const git = this.requireGit();
     const preMergeSha = (await this.mustGit(git.integrationWorktree, ["rev-parse", "HEAD"])).trim();
     const suffix = sha256(operationId).slice(0, 12);
-    const candidateBranch = `swarm/${this.runId}/candidate/${suffix}`;
+    const candidateBranch = `capstan/${this.runId}/candidate/${suffix}`;
     const candidateWorktree = join(dirname(git.integrationWorktree), `candidate-${suffix}`);
     if (!(await this.branchExists(candidateBranch))) {
       await this.mustGit(git.repoRoot, ["branch", candidateBranch, preMergeSha]);
@@ -194,7 +194,7 @@ export class WorkspaceManager {
       const unresolved = (await this.gitCommand(operation.candidateWorktree, ["diff", "--name-only", "--diff-filter=U"])).stdout.trim().split("\n").filter(Boolean);
       if (!unresolved.length) {
         await this.mustGit(operation.candidateWorktree, ["add", "-A"]);
-        await this.mustGit(operation.candidateWorktree, ["-c", "user.name=Pi Swarm", "-c", "user.email=pi-swarm@local.invalid", "commit", "--no-edit"]);
+        await this.mustGit(operation.candidateWorktree, ["-c", "user.name=Pi Capstan", "-c", "user.email=pi-capstan@local.invalid", "commit", "--no-edit"]);
         if (!operation.subtaskIds.includes(task.id)) operation.subtaskIds.push(task.id);
         operation.pendingSubtaskId = undefined;
         operation.phase = "candidate";
@@ -204,7 +204,7 @@ export class WorkspaceManager {
       }
       return { ok: false, conflicts: unresolved };
     }
-    const merge = await this.gitCommand(operation.candidateWorktree, ["-c", "user.name=Pi Swarm", "-c", "user.email=pi-swarm@local.invalid", "merge", "--no-ff", "-m", `merge swarm task ${task.id}`, branch]);
+    const merge = await this.gitCommand(operation.candidateWorktree, ["-c", "user.name=Pi Capstan", "-c", "user.email=pi-capstan@local.invalid", "merge", "--no-ff", "-m", `merge capstan task ${task.id}`, branch]);
     if (merge.exitCode === 0) {
       if (!operation.subtaskIds.includes(task.id)) operation.subtaskIds.push(task.id);
       operation.pendingSubtaskId = undefined;
@@ -221,7 +221,7 @@ export class WorkspaceManager {
     const unresolved = (await this.gitCommand(operation.candidateWorktree, ["diff", "--name-only", "--diff-filter=U"])).stdout.trim();
     if (unresolved) throw new Error(`仍有未解决冲突: ${unresolved}`);
     await this.mustGit(operation.candidateWorktree, ["add", "-A"]);
-    await this.mustGit(operation.candidateWorktree, ["-c", "user.name=Pi Swarm", "-c", "user.email=pi-swarm@local.invalid", "commit", "-m", message]);
+    await this.mustGit(operation.candidateWorktree, ["-c", "user.name=Pi Capstan", "-c", "user.email=pi-capstan@local.invalid", "commit", "-m", message]);
     if (operation.pendingSubtaskId && !operation.subtaskIds.includes(operation.pendingSubtaskId)) operation.subtaskIds.push(operation.pendingSubtaskId);
     operation.pendingSubtaskId = undefined;
     operation.phase = "candidate";
@@ -235,7 +235,7 @@ export class WorkspaceManager {
     await this.mustGit(target, ["add", "-A"]);
     const staged = (await this.mustGit(target, ["diff", "--cached", "--name-only"])).trim();
     if (!staged) return undefined;
-    await this.mustGit(target, ["-c", "user.name=Pi Swarm", "-c", "user.email=pi-swarm@local.invalid", "commit", "-m", message]);
+    await this.mustGit(target, ["-c", "user.name=Pi Capstan", "-c", "user.email=pi-capstan@local.invalid", "commit", "-m", message]);
     const sha = (await this.mustGit(target, ["rev-parse", "HEAD"])).trim();
     if (operation) operation.candidateSha = sha, (operation.updatedAt = Date.now());
     return sha;
@@ -275,7 +275,7 @@ export class WorkspaceManager {
     await this.closeCandidate(operation);
   }
 
-  async reconcileOperation(run: SwarmRun): Promise<void> {
+  async reconcileOperation(run: CapstanRun): Promise<void> {
     const operation = [...(run.gitOperations ?? [])].reverse().find((item) => !["promoted", "discarded"].includes(item.phase));
     if (!operation) return;
     const git = this.requireGit();
@@ -339,7 +339,7 @@ export class WorkspaceManager {
     try {
       await this.mustGit(git.repoRoot, ["merge", "--squash", git.integrationBranch]);
       if (strategy === "commit") {
-        await this.mustGit(git.repoRoot, ["-c", "user.name=Pi Swarm", "-c", "user.email=pi-swarm@local.invalid", "commit", "-m", `swarm: ${this.runId}`]);
+        await this.mustGit(git.repoRoot, ["-c", "user.name=Pi Capstan", "-c", "user.email=pi-capstan@local.invalid", "commit", "-m", `capstan: ${this.runId}`]);
         return { outcome: "committed", note: "已生成 squash commit" };
       }
       return { outcome: "applied", note: "结果已暂存，请用 git diff --staged 审阅" };
@@ -366,7 +366,7 @@ export class WorkspaceManager {
     for (const path of paths) if (!preserved.has(resolve(path))) await this.gitCommand(git.repoRoot, ["worktree", "remove", "--force", path]);
     await this.gitCommand(git.repoRoot, ["worktree", "prune"]);
     if (!preserveBranches) {
-      const branches = (await this.gitCommand(git.repoRoot, ["branch", "--list", `swarm/${this.runId}/*`])).stdout.split("\n").map((line) => line.replace(/^\*?\s*/, "")).filter(Boolean);
+      const branches = (await this.gitCommand(git.repoRoot, ["branch", "--list", `capstan/${this.runId}/*`])).stdout.split("\n").map((line) => line.replace(/^\*?\s*/, "")).filter(Boolean);
       for (const branch of branches) await this.gitCommand(git.repoRoot, ["branch", "-D", branch]);
     }
   }
@@ -374,14 +374,14 @@ export class WorkspaceManager {
   async discardTaskWorktree(path: string, branch: string): Promise<void> {
     await this.runExclusiveWorktreeMutation(async () => {
       const git = this.requireGit();
-      if (!branch.startsWith(`swarm/${this.runId}/`)) throw new Error(`refusing to discard non-swarm branch ${branch}`);
+      if (!branch.startsWith(`capstan/${this.runId}/`)) throw new Error(`refusing to discard non-capstan branch ${branch}`);
       if (await this.isWorktree(path)) await this.gitCommand(git.repoRoot, ["worktree", "remove", "--force", path]);
       if (await this.branchExists(branch)) await this.gitCommand(git.repoRoot, ["branch", "-D", branch]);
       await this.gitCommand(git.repoRoot, ["worktree", "prune"]);
     });
   }
 
-  async reconcileMerged(run: SwarmRun): Promise<void> {
+  async reconcileMerged(run: CapstanRun): Promise<void> {
     const git = this.requireGit();
     for (const [id, worker] of Object.entries(run.workers)) {
       if (run.merged.includes(id)) continue;
@@ -410,7 +410,7 @@ export class WorkspaceManager {
     try {
       await this.mustGit(repoRoot, ["add", "-A"], env);
       const tree = (await this.mustGit(repoRoot, ["write-tree"], env)).trim();
-      return (await this.mustGit(repoRoot, ["commit-tree", tree, "-p", parent, "-m", "swarm temporary baseline"], env)).trim();
+      return (await this.mustGit(repoRoot, ["commit-tree", tree, "-p", parent, "-m", "capstan temporary baseline"], env)).trim();
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

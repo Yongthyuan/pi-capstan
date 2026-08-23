@@ -1,5 +1,5 @@
 /**
- * Lightweight metrics collector for a single swarm run.
+ * Lightweight metrics collector for a single capstan run.
  * Events are appended to metrics.jsonl for later analysis.
  */
 

@@ -89,7 +89,7 @@ interface SchedulingStrategy {
   
   // 初始调度决策
   schedule(
-    plan: SwarmPlan,
+    plan: CapstanPlan,
     context: {
       maxConcurrency: number;
       remainingBudget: number;
@@ -165,11 +165,11 @@ interface CollaborationPrimitive {
 ```
 
 **示例**：共享 KV 存储（`docs/examples/plugins/shared-kv-store.ts`）
-- `swarm_kv_set(key, value, ttl?)` - 设置键值
-- `swarm_kv_get(key)` - 获取值
-- `swarm_kv_list(prefix?)` - 列出所有键
-- `swarm_kv_delete(key)` - 删除键
-- `swarm_kv_watch(key)` - 等待键被设置（barrier 原语）
+- `capstan_kv_set(key, value, ttl?)` - 设置键值
+- `capstan_kv_get(key)` - 获取值
+- `capstan_kv_list(prefix?)` - 列出所有键
+- `capstan_kv_delete(key)` - 删除键
+- `capstan_kv_watch(key)` - 等待键被设置（barrier 原语）
 
 **配置**：
 ```json
@@ -222,7 +222,7 @@ npx tsc my-plugin.ts --module esnext --target es2022
 
 ### 步骤 3：配置使用
 
-在 `.pi/swarm.json` 中引用：
+在 `.pi/capstan.json` 中引用：
 
 ```json
 {
@@ -235,7 +235,7 @@ npx tsc my-plugin.ts --module esnext --target es2022
 ### 步骤 4：测试
 
 ```bash
-/swarm "test task" --plan-only
+/capstan "test task" --plan-only
 ```
 
 ## Claude 如何使用插件
@@ -243,7 +243,7 @@ npx tsc my-plugin.ts --module esnext --target es2022
 ### 场景 1：用户要求增量验证
 
 ```
-用户："我需要一个只跑受影响测试的 swarm 配置"
+用户："我需要一个只跑受影响测试的 capstan 配置"
 
 Claude 的思考过程：
 1. 阅读 docs/PLUGINS.md
@@ -268,14 +268,14 @@ Claude 的思考过程：
 2. 发现共享 KV 存储示例
 3. 配置协作原语
 4. 告诉用户 workers 可以使用：
-   - swarm_kv_set("api_endpoints", [...])
-   - swarm_kv_get("api_endpoints")
+   - capstan_kv_set("api_endpoints", [...])
+   - capstan_kv_get("api_endpoints")
 ```
 
 ### 场景 3：用户遇到高冲突率
 
 ```
-用户："swarm 一直有合并冲突"
+用户："capstan 一直有合并冲突"
 
 Claude 的思考过程：
 1. 分析问题：并发度太高导致路径冲突
@@ -355,7 +355,7 @@ async cleanup(): Promise<void> {
 ### 查看加载的插件
 
 ```bash
-/swarm status
+/capstan status
 ```
 
 会显示：
@@ -384,7 +384,7 @@ Error: Plugin module not found: ~/.pi/agent/plugins/my-plugin.js
 插件运行时错误会记录在日志中：
 
 ```bash
-cat ~/.pi/agent/swarm/runs/<run-id>/log.txt
+cat ~/.pi/agent/capstan/runs/<run-id>/log.txt
 ```
 
 ## 内置 vs 插件

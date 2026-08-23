@@ -1,4 +1,4 @@
-import type { ParsedSwarmCommand } from "./types.ts";
+import type { ParsedCapstanCommand } from "./types.ts";
 
 const ACTIONS = new Set(["board", "pause", "resume", "abort", "merge", "pr", "replan", "clean", "cases", "replay", "config", "validate", "analyze", "status", "help"]);
 
@@ -30,9 +30,9 @@ export function splitArgs(input: string): string[] {
   return result;
 }
 
-export function parseSwarmCommand(input: string): ParsedSwarmCommand {
+export function parseCapstanCommand(input: string): ParsedCapstanCommand {
   const tokens = splitArgs(input);
-  const parsed: ParsedSwarmCommand = {
+  const parsed: ParsedCapstanCommand = {
     action: "run",
     task: "",
     force: false,
@@ -42,7 +42,7 @@ export function parseSwarmCommand(input: string): ParsedSwarmCommand {
     warnings: [],
   };
   if (tokens[0] && ACTIONS.has(tokens[0])) {
-    parsed.action = tokens.shift() as ParsedSwarmCommand["action"];
+    parsed.action = tokens.shift() as ParsedCapstanCommand["action"];
     parsed.rest = tokens;
     return parsed;
   }

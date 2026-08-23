@@ -11,7 +11,7 @@ import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
  *
  * Install:
  * 1. Copy this file to ~/.pi/agent/extensions/custom-policies.ts
- * 2. Add to .pi/swarm.json:
+ * 2. Add to .pi/capstan.json:
  *    {
  *      "safetyGuardPath": "~/.pi/agent/extensions/custom-policies.ts"
  *    }
@@ -43,7 +43,7 @@ export default function(pi: ExtensionAPI) {
       }
 
       // Block modifications to lock files (should use package manager)
-      if (path.endsWith("package-lock.json") && !path.includes("swarm")) {
+      if (path.endsWith("package-lock.json") && !path.includes("capstan")) {
         return {
           block: true,
           reason: "Do not manually edit package-lock.json. Use npm install instead."
@@ -65,11 +65,11 @@ export default function(pi: ExtensionAPI) {
         };
       }
 
-      // Block direct git operations (swarm manages git)
+      // Block direct git operations (capstan manages git)
       if (cmd.match(/\bgit\s+(add|commit|push|merge|rebase)/)) {
         return {
           block: true,
-          reason: "Do not use git commands directly. Swarm manages git operations."
+          reason: "Do not use git commands directly. Capstan manages git operations."
         };
       }
 

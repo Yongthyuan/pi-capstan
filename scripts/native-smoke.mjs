@@ -6,13 +6,13 @@ import { DEFAULT_CONFIG } from "../src/config.ts";
 import { writeGuardExtension } from "../src/guard-template.ts";
 import { WorkerHandle } from "../src/worker.ts";
 
-const root = await mkdtemp(join(tmpdir(), "pi-swarm-native-"));
+const root = await mkdtemp(join(tmpdir(), "pi-capstan-native-"));
 const agentDir = join(root, "agent");
 const sessions = join(root, "sessions");
 await mkdir(agentDir, { recursive: true });
 await mkdir(sessions, { recursive: true });
 await mkdir(join(agentDir, "extensions"), { recursive: true });
-await symlink(process.cwd(), join(agentDir, "extensions", "swarm"), process.platform === "win32" ? "junction" : "dir");
+await symlink(process.cwd(), join(agentDir, "extensions", "capstan"), process.platform === "win32" ? "junction" : "dir");
 
 const piCli = join(process.cwd(), "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
 const child = spawn(process.execPath, [
@@ -59,9 +59,9 @@ function request(payload, timeoutMs = 15_000) {
 
 try {
   const commands = await request({ id: "commands", type: "get_commands" });
-  if (!commands.success || !commands.data.commands.some((item) => item.name === "swarm")) throw new Error(`swarm command not registered: ${JSON.stringify(commands)}`);
-  const status = await request({ id: "status", type: "prompt", message: "/swarm status" });
-  if (!status.success) throw new Error(`swarm command failed: ${JSON.stringify(status)}`);
+  if (!commands.success || !commands.data.commands.some((item) => item.name === "capstan")) throw new Error(`capstan command not registered: ${JSON.stringify(commands)}`);
+  const status = await request({ id: "status", type: "prompt", message: "/capstan status" });
+  if (!status.success) throw new Error(`capstan command failed: ${JSON.stringify(status)}`);
   const worktree = join(root, "worker-tree");
   const runDir = join(root, "worker-run");
   await mkdir(worktree, { recursive: true });

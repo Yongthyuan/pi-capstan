@@ -2,7 +2,7 @@
   "worker": {
     "strictBash": true,
     "scopeViolationPolicy": "fail",
-    "tools": ["read", "edit", "write", "grep", "find", "ls", "swarm_send", "swarm_inbox", "swarm_fs"],
+    "tools": ["read", "edit", "write", "grep", "find", "ls", "capstan_send", "capstan_inbox", "capstan_fs"],
     "maxRetries": 1
   },
   "approvalPolicy": "autoDeny",

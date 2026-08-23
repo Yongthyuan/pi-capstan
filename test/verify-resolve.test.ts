@@ -9,10 +9,10 @@ import { generateConfigFromAnswers } from "../src/config-wizard.ts";
 import { parsePorcelainStatus } from "../src/workspace.ts";
 import { resolveVerifyCommands, skippedVerification, verifyCommands } from "../src/verifier.ts";
 import { buildReport } from "../src/reporter.ts";
-import type { SwarmRun } from "../src/types.ts";
+import type { CapstanRun } from "../src/types.ts";
 
 test("resolveVerifyCommands: fallback wins, [] skips, null detects", async () => {
-  const root = await mkdtemp(join(tmpdir(), "swarm-resolve-"));
+  const root = await mkdtemp(join(tmpdir(), "capstan-resolve-"));
   try {
     await writeFile(join(root, "package.json"), JSON.stringify({ scripts: { typecheck: "tsc", test: "node --test" } }));
     const fallback = await resolveVerifyCommands({
@@ -48,7 +48,7 @@ test("empty verification is skipped, not a fake pass in reports", async () => {
     conflicts: [],
     totals: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, wallSec: 1, turns: 0 },
     planRevision: 1,
-  } as unknown as SwarmRun;
+  } as unknown as CapstanRun;
   const report = buildReport(run, skipped);
   assert.match(report, /集成全量: 跳过/);
   assert.doesNotMatch(report, /集成全量: ✓ 无命令/);

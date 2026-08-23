@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runCommand } from "../src/utils.ts";
 
-const model = process.env.PI_SWARM_TEST_MODEL;
-if (!model) throw new Error("PI_SWARM_TEST_MODEL is required");
+const model = process.env.PI_CAPSTAN_TEST_MODEL;
+if (!model) throw new Error("PI_CAPSTAN_TEST_MODEL is required");
 
-const root = await mkdtemp(join(tmpdir(), "pi-swarm-e2e-"));
+const root = await mkdtemp(join(tmpdir(), "pi-capstan-e2e-"));
 const repo = join(root, "repo");
 const sessions = join(root, "sessions");
 await mkdir(join(repo, ".pi"), { recursive: true });
@@ -22,18 +22,18 @@ async function git(args) {
 let child;
 try {
   await writeFile(join(repo, "README.md"), "# Native end-to-end smoke\n");
-  await writeFile(join(repo, ".pi", "swarm.json"), `${JSON.stringify({
+  await writeFile(join(repo, ".pi", "capstan.json"), `${JSON.stringify({
     planner: { timeoutSec: 180, budgetUsd: 5, tokenLimit: 200000 },
     worker: { model, tools: ["read", "write"], maxConcurrency: 2, maxRetries: 0, wallClockMin: 5, perAgentBudgetUsd: 5 },
     run: { budgetUsd: 10, verifyAllowedPrefixes: ["true"], verify: { worker: null, integrationLight: [], full: [] } },
   }, null, 2)}\n`);
   await git(["init", "-q"]);
   await git(["config", "user.email", "test@example.invalid"]);
-  await git(["config", "user.name", "Pi Swarm Test"]);
-  await git(["add", "README.md", ".pi/swarm.json"]);
+  await git(["config", "user.name", "Pi Capstan Test"]);
+  await git(["add", "README.md", ".pi/capstan.json"]);
   await git(["commit", "-qm", "initial"]);
 
-  child = spawn(process.env.PI_SWARM_PI_BIN ?? "pi", [
+  child = spawn(process.env.PI_CAPSTAN_PI_BIN ?? "pi", [
     "--mode", "rpc",
     "--model", model,
     "--session-dir", sessions,
@@ -76,11 +76,11 @@ try {
   const prompt = await request({
     id: "e2e",
     type: "prompt",
-    message: "/swarm \"Create alpha.txt containing exactly alpha and beta.txt containing exactly beta as two independent tasks. Each worker owns only its exact file and uses true for acceptance.\" --force",
+    message: "/capstan \"Create alpha.txt containing exactly alpha and beta.txt containing exactly beta as two independent tasks. Each worker owns only its exact file and uses true for acceptance.\" --force",
   });
-  if (!prompt.success) throw new Error(`swarm command failed: ${JSON.stringify(prompt)}`);
+  if (!prompt.success) throw new Error(`capstan command failed: ${JSON.stringify(prompt)}`);
 
-  const runsRoot = join(repo, ".pi", "swarm", "runs");
+  const runsRoot = join(repo, ".pi", "capstan", "runs");
   const deadline = Date.now() + 300_000;
   let state;
   while (!state) {
@@ -99,7 +99,7 @@ try {
   const beta = await git(["show", `${state.git.integrationBranch}:beta.txt`]);
   if (alpha !== "alpha" || beta !== "beta") throw new Error(`unexpected files: alpha=${JSON.stringify(alpha)} beta=${JSON.stringify(beta)}`);
   if (!state.gitOperations?.every((operation) => operation.phase === "promoted")) throw new Error("candidate operations were not fully promoted");
-  process.stdout.write(`native full /swarm E2E ok: ${model}, workers=${state.plan.subtasks.length}, turns=${state.totals.turns}\n`);
+  process.stdout.write(`native full /capstan E2E ok: ${model}, workers=${state.plan.subtasks.length}, turns=${state.totals.turns}\n`);
 } finally {
   if (child) {
     child.stdin.end();

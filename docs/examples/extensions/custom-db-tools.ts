@@ -3,12 +3,12 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 /**
  * Example: Custom database query tool for workers
  *
- * This extension adds a `swarm_query_db` tool that allows workers to
+ * This extension adds a `capstan_query_db` tool that allows workers to
  * execute read-only SQL queries against the project database.
  *
  * Install:
  * 1. Copy this file to ~/.pi/agent/extensions/db-tools.ts
- * 2. Add to .pi/swarm.json:
+ * 2. Add to .pi/capstan.json:
  *    {
  *      "safetyGuardPath": "~/.pi/agent/extensions/db-tools.ts"
  *    }
@@ -18,7 +18,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 export default function(pi: ExtensionAPI) {
   // Custom tool: Query project database
   pi.registerTool({
-    name: "swarm_query_db",
+    name: "capstan_query_db",
     label: "Query Project Database",
     description: "Execute read-only SQL query against project database to retrieve schema information, sample data, or table relationships",
     parameters: {
@@ -78,7 +78,7 @@ export default function(pi: ExtensionAPI) {
 
   // Custom tool: Semantic code search
   pi.registerTool({
-    name: "swarm_semantic_search",
+    name: "capstan_semantic_search",
     label: "Semantic Code Search",
     description: "Search codebase using natural language to find relevant code patterns, implementations, or examples",
     parameters: {

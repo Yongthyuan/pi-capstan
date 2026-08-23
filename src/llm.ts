@@ -1,5 +1,5 @@
 import type { GateModel } from "./gate.ts";
-import type { SwarmConfig, SwarmPlan, UsageTotals } from "./types.ts";
+import type { CapstanConfig, CapstanPlan, UsageTotals } from "./types.ts";
 import { makeRunId } from "./utils.ts";
 
 export interface PiModelLike {
@@ -23,10 +23,10 @@ export type LlmUsageHook = (usage: UsageTotals, meta: { model: string; stopReaso
 
 export class PiLlmClient implements GateModel {
   private readonly ctx: ModelContextLike;
-  private readonly config: SwarmConfig;
+  private readonly config: CapstanConfig;
   private readonly onUsage?: LlmUsageHook;
 
-  constructor(ctx: ModelContextLike, config: SwarmConfig, onUsage?: LlmUsageHook) {
+  constructor(ctx: ModelContextLike, config: CapstanConfig, onUsage?: LlmUsageHook) {
     this.ctx = ctx;
     this.config = config;
     this.onUsage = onUsage;
@@ -39,17 +39,17 @@ export class PiLlmClient implements GateModel {
   async classify(task: string, repoSummary: string, ruleHits: string[]) {
     return this.completeJson<{ complexity: number; parallelizable: boolean; reason: string; estSubtasks: number }>(
       this.config.gate.model,
-      `You are a task-complexity classifier for a coding agent swarm.\nTask: ${task}\nRepo: ${repoSummary}\nRule signals: ${ruleHits.join(", ")}\nA task is complex only when it contains at least two largely independent workstreams. Respond with JSON only: {"complexity":0,"parallelizable":false,"reason":"one sentence","estSubtasks":1}`,
+      `You are a task-complexity classifier for a coding agent capstan.\nTask: ${task}\nRepo: ${repoSummary}\nRule signals: ${ruleHits.join(", ")}\nA task is complex only when it contains at least two largely independent workstreams. Respond with JSON only: {"complexity":0,"parallelizable":false,"reason":"one sentence","estSubtasks":1}`,
       "off",
     );
   }
 
-  async plan(prompt: string): Promise<SwarmPlan | { recommend: "solo"; reason: string }> {
-    return this.completeJson<SwarmPlan | { recommend: "solo"; reason: string }>(this.config.planner.model, prompt, "high");
+  async plan(prompt: string): Promise<CapstanPlan | { recommend: "solo"; reason: string }> {
+    return this.completeJson<CapstanPlan | { recommend: "solo"; reason: string }>(this.config.planner.model, prompt, "high");
   }
 
-  async repairPlan(raw: string, errors: string[], prompt: string): Promise<SwarmPlan | { recommend: "solo"; reason: string }> {
-    return this.completeJson<SwarmPlan | { recommend: "solo"; reason: string }>(
+  async repairPlan(raw: string, errors: string[], prompt: string): Promise<CapstanPlan | { recommend: "solo"; reason: string }> {
+    return this.completeJson<CapstanPlan | { recommend: "solo"; reason: string }>(
       this.config.planner.model,
       `${prompt}\n\nThe previous JSON was invalid:\n${raw}\n\nValidation errors:\n- ${errors.join("\n- ")}\nReturn corrected JSON only.`,
       "high",
@@ -58,7 +58,10 @@ export class PiLlmClient implements GateModel {
 
   private async completeJson<T>(modelSpec: string | null, prompt: string, reasoningEffort: string): Promise<T> {
     const model = this.resolveModel(modelSpec);
-    if (!model) throw new Error(`没有可用且已认证的模型${modelSpec ? `: ${modelSpec}` : ""}`);
+    if (!model)
+      throw new Error(
+        `No authenticated model available${modelSpec ? ` for ${modelSpec}` : ""}. Fix: open Pi, pick a model with /model and complete provider sign-in, then retry.\n没有可用且已认证的模型——请在 Pi 中用 /model 选择模型并完成认证后重试。`,
+      );
     const response = await this.ctx.modelRegistry.complete(
       model,
       { messages: [{ role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() }] },

@@ -9,7 +9,7 @@
  * - Track global state (migrations applied, schemas generated)
  * - Implement barrier synchronization
  *
- * Usage in .pi/swarm.json:
+ * Usage in .pi/capstan.json:
  * {
  *   "run": {
  *     "collaborationPrimitives": ["~/.pi/agent/plugins/shared-kv-store.js"]
@@ -17,11 +17,11 @@
  * }
  *
  * Workers can then use these tools:
- * - swarm_kv_set(key, value, ttl?)
- * - swarm_kv_get(key)
- * - swarm_kv_list(prefix?)
- * - swarm_kv_delete(key)
- * - swarm_kv_watch(key) - wait for key to be set
+ * - capstan_kv_set(key, value, ttl?)
+ * - capstan_kv_get(key)
+ * - capstan_kv_list(prefix?)
+ * - capstan_kv_delete(key)
+ * - capstan_kv_watch(key) - wait for key to be set
  */
 
 import type { CollaborationPrimitive } from '../../../src/plugins/interfaces.ts';
@@ -50,7 +50,7 @@ export default class SharedKVStore implements CollaborationPrimitive {
   getTools() {
     return [
       {
-        name: 'swarm_kv_set',
+        name: 'capstan_kv_set',
         description: 'Set a key-value pair in the shared store. Optionally set TTL in milliseconds.',
         inputSchema: {
           type: 'object' as const,
@@ -79,7 +79,7 @@ export default class SharedKVStore implements CollaborationPrimitive {
         },
       },
       {
-        name: 'swarm_kv_get',
+        name: 'capstan_kv_get',
         description: 'Get a value from the shared store',
         inputSchema: {
           type: 'object' as const,
@@ -96,7 +96,7 @@ export default class SharedKVStore implements CollaborationPrimitive {
         },
       },
       {
-        name: 'swarm_kv_list',
+        name: 'capstan_kv_list',
         description: 'List all keys, optionally filtered by prefix',
         inputSchema: {
           type: 'object' as const,
@@ -112,7 +112,7 @@ export default class SharedKVStore implements CollaborationPrimitive {
         },
       },
       {
-        name: 'swarm_kv_delete',
+        name: 'capstan_kv_delete',
         description: 'Delete a key from the shared store',
         inputSchema: {
           type: 'object' as const,
@@ -129,7 +129,7 @@ export default class SharedKVStore implements CollaborationPrimitive {
         },
       },
       {
-        name: 'swarm_kv_watch',
+        name: 'capstan_kv_watch',
         description: 'Wait for a key to be set. Returns immediately if already set, otherwise blocks until set.',
         inputSchema: {
           type: 'object' as const,

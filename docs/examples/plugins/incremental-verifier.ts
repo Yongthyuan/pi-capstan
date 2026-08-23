@@ -11,7 +11,7 @@
  * The runtime then runs those commands through verifyCommands (allowlist + shell:false).
  * `verify()` is not called.
  *
- * Usage in .pi/swarm.json:
+ * Usage in .pi/capstan.json:
  * {
  *   "run": {
  *     "verificationStrategy": "~/.pi/agent/plugins/incremental-verifier.js"

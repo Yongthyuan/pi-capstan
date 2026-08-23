@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { ConflictRecord, GitMergeOperation, PendingUiRequest, Subtask, SwarmConfig, SwarmRun, VerificationResult, WorkerRuntime } from "./types.ts";
+import type { ConflictRecord, GitMergeOperation, PendingUiRequest, Subtask, CapstanConfig, CapstanRun, VerificationResult, WorkerRuntime } from "./types.ts";
 import { addUsage, emptyUsage, ensurePrivateDir, pathExists, truncateTail } from "./utils.ts";
 import { RunStore } from "./state.ts";
 import { WorkspaceManager } from "./workspace.ts";
@@ -17,18 +17,18 @@ import type { DefaultPluginRegistry } from "./plugins/registry.ts";
 
 export interface OrchestratorHooks {
   projectTrusted: boolean;
-  onUpdate(run: SwarmRun): void;
+  onUpdate(run: CapstanRun): void;
   onUi(workerId: string, request: PendingUiRequest & Record<string, unknown>): Promise<Record<string, unknown>>;
   onUiBatch?(requests: Array<{ workerId: string; request: PendingUiRequest & Record<string, unknown> }>): Promise<Record<string, Record<string, unknown>>>;
   onLeadMessage?(workerId: string, message: string): Promise<void> | void;
   onBudget(workerId: string, message: string): Promise<"extend" | "stop">;
-  onBeforeReport?(run: SwarmRun): Promise<void> | void;
-  onReport(run: SwarmRun, report: string): Promise<void> | void;
+  onBeforeReport?(run: CapstanRun): Promise<void> | void;
+  onReport(run: CapstanRun, report: string): Promise<void> | void;
 }
 
 export interface OrchestratorOptions {
-  run: SwarmRun;
-  config: SwarmConfig;
+  run: CapstanRun;
+  config: CapstanConfig;
   store: RunStore;
   workspace: WorkspaceManager;
   agentDir: string;
@@ -52,8 +52,8 @@ interface QueuedUiRequest {
 class ControlFlowError extends Error {}
 
 export class Orchestrator {
-  readonly run: SwarmRun;
-  readonly config: SwarmConfig;
+  readonly run: CapstanRun;
+  readonly config: CapstanConfig;
   readonly store: RunStore;
   readonly workspace: WorkspaceManager;
   readonly agentDir: string;
@@ -265,7 +265,7 @@ export class Orchestrator {
     if (!launch) throw new Error(`worker ${id} 缺少持久化启动清单，拒绝生成不受保护的接管命令`);
     const args = ["pi", "--no-extensions"];
     if (runtime.sessionFile) args.push("--session", runtime.sessionFile);
-    else args.push("--name", `swarm/${id} manual takeover`);
+    else args.push("--name", `capstan/${id} manual takeover`);
     if (launch.model) args.push("--model", launch.model);
     if (launch.tools.length) args.push("--tools", launch.tools.join(","));
     args.push("--append-system-prompt", launch.promptPath);
@@ -274,7 +274,7 @@ export class Orchestrator {
     return buildManualTakeoverCommand(runtime.worktree, this.run.runDir, args);
   }
 
-  async replacePlan(plan: SwarmRun["plan"]): Promise<void> {
+  async replacePlan(plan: CapstanRun["plan"]): Promise<void> {
     if (!plan) throw new Error("新计划为空");
     const validation = validatePlan(plan, this.config.planner.maxSubtasks);
     if (!validation.ok) throw new Error(`新计划无效: ${validation.errors.join("; ")}`);
@@ -443,7 +443,7 @@ export class Orchestrator {
       if (!skipInitialTurn) {
         const worker = await ensureHandle();
         const prompt = existing
-          ? "Resume this interrupted swarm task from the persisted session and worktree. Inspect current changes first, finish the mission, and end with an updated Completion Report."
+          ? "Resume this interrupted capstan task from the persisted session and worktree. Inspect current changes first, finish the mission, and end with an updated Completion Report."
           : this.workerBrief(task);
         await this.runControlledPrompt(worker, runtime, prompt, "working");
       }
@@ -645,7 +645,7 @@ export class Orchestrator {
       subtaskId: task.id,
       status: "blocked",
       worktree: "",
-      branch: `swarm/${this.run.runId}/${task.id}`,
+      branch: `capstan/${this.run.runId}/${task.id}`,
       currentAction: "blocked by failed dependency",
       usage: emptyUsage(),
       turns: 0,
@@ -809,7 +809,7 @@ export class Orchestrator {
     if (operation) {
       operation.verification = result;
       operation.phase = "verified";
-      operation.candidateSha = await this.workspace.commitIntegration("swarm: persist verified candidate", operation) ?? operation.candidateSha;
+      operation.candidateSha = await this.workspace.commitIntegration("capstan: persist verified candidate", operation) ?? operation.candidateSha;
       operation.updatedAt = Date.now();
       await this.persist();
     }
@@ -861,7 +861,7 @@ export class Orchestrator {
     const runtime = this.syntheticRuntime(task, operation.candidateWorktree, operation.candidateBranch);
     try {
       await this.runControlledPrompt(handle, runtime, verificationFailurePrompt(failure, 1, 1), "fixing");
-      await this.workspace.commitIntegration("swarm: fix integration verification", this.activeOperation());
+      await this.workspace.commitIntegration("capstan: fix integration verification", this.activeOperation());
     } finally {
       await handle.stop().catch(() => undefined);
       this.handles.delete(task.id);
@@ -1110,7 +1110,7 @@ export class Orchestrator {
     const contracts = this.run.plan!.contracts.filter((contract) => task.contracts.includes(contract.id));
     const upstream = task.dependsOn.map((id) => this.run.workers[id]?.completionReport).filter(Boolean).join("\n\n");
     const peers = [...this.run.plan!.subtasks.filter((peer) => peer.id !== task.id).map((peer) => peer.id), "lead"];
-    return `You are agent ${task.role} in a swarm working on: ${this.run.plan!.taskSummary}.\n\nMISSION\n${task.goal}\n\nCONTRACTS\n${contracts.map((contract) => `${contract.id}: ${contract.definition}`).join("\n") || "None"}\n\nSCOPE\nOwned: ${task.ownedPaths.join(", ")}\nShared metadata: ${[...(task.sharedPaths ?? []), ...this.config.worker.scopeAllowlist].join(", ") || "None"}\nGenerated: ${(task.generatedPaths ?? []).join(", ") || "None"}\nRead context: ${task.readPaths.join(", ")}\nDo not modify other paths. Git commits and pushes are owned by the orchestrator. Use write/edit for content and swarm_fs for mkdir, touch, copy, move, or delete; do not fight the bash guard.\n\nPEERS\n${peers.join(", ") || "None"}. Use swarm_send only for concrete interface/blocker coordination, and check swarm_inbox when coordination is expected.\n\nUPSTREAM\n${upstream || "None"}\n\nACCEPTANCE\n${task.acceptance.commands.join("\n")}\n${task.acceptance.criteria.join("\n")}\n\nWork autonomously. Finish with ## Completion Report containing what changed, files changed, verification, and follow-ups.`;
+    return `You are agent ${task.role} in a capstan working on: ${this.run.plan!.taskSummary}.\n\nMISSION\n${task.goal}\n\nCONTRACTS\n${contracts.map((contract) => `${contract.id}: ${contract.definition}`).join("\n") || "None"}\n\nSCOPE\nOwned: ${task.ownedPaths.join(", ")}\nShared metadata: ${[...(task.sharedPaths ?? []), ...this.config.worker.scopeAllowlist].join(", ") || "None"}\nGenerated: ${(task.generatedPaths ?? []).join(", ") || "None"}\nRead context: ${task.readPaths.join(", ")}\nDo not modify other paths. Git commits and pushes are owned by the orchestrator. Use write/edit for content and capstan_fs for mkdir, touch, copy, move, or delete; do not fight the bash guard.\n\nPEERS\n${peers.join(", ") || "None"}. Use capstan_send only for concrete interface/blocker coordination, and check capstan_inbox when coordination is expected.\n\nUPSTREAM\n${upstream || "None"}\n\nACCEPTANCE\n${task.acceptance.commands.join("\n")}\n${task.acceptance.criteria.join("\n")}\n\nWork autonomously. Finish with ## Completion Report containing what changed, files changed, verification, and follow-ups.`;
   }
 
   private async resolveSafetyGuard(): Promise<string | undefined> {
@@ -1167,7 +1167,7 @@ export class Orchestrator {
       if (messages.length) {
         runtime.currentAction = `received ${messages.length} peer message(s)`;
         runtime.lastEventAt = Date.now();
-        await handle.steer(`SWARM MAILBOX\n${messages.join("\n\n")}\nAcknowledge or act only if relevant to your owned task.`).catch(() => undefined);
+        await handle.steer(`CAPSTAN MAILBOX\n${messages.join("\n\n")}\nAcknowledge or act only if relevant to your owned task.`).catch(() => undefined);
       }
       this.schedulePersist();
     }
@@ -1335,7 +1335,7 @@ function powershellQuote(value: string): string {
 
 export function buildManualTakeoverCommand(worktree: string, runDir: string, args: string[], platform: NodeJS.Platform = process.platform): string {
   if (platform === "win32") {
-    return `Set-Location -LiteralPath ${powershellQuote(worktree)}; $env:PI_SWARM_WORKER='1'; $env:PI_SWARM_RUN_DIR=${powershellQuote(runDir)}; & ${args.map(powershellQuote).join(" ")}`;
+    return `Set-Location -LiteralPath ${powershellQuote(worktree)}; $env:PI_CAPSTAN_WORKER='1'; $env:PI_CAPSTAN_RUN_DIR=${powershellQuote(runDir)}; & ${args.map(powershellQuote).join(" ")}`;
   }
-  return `cd ${shellQuote(worktree)} && env PI_SWARM_WORKER=1 PI_SWARM_RUN_DIR=${shellQuote(runDir)} ${args.map(shellQuote).join(" ")}`;
+  return `cd ${shellQuote(worktree)} && env PI_CAPSTAN_WORKER=1 PI_CAPSTAN_RUN_DIR=${shellQuote(runDir)} ${args.map(shellQuote).join(" ")}`;
 }

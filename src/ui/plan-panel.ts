@@ -1,14 +1,14 @@
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { matchesKey, visibleWidth } from "@earendil-works/pi-tui";
-import type { GateResult, SwarmPlan } from "../types.ts";
+import type { GateResult, CapstanPlan } from "../types.ts";
 import { validatePlan } from "../plan-validation.ts";
 
 export interface ReviewResult {
-  plan?: SwarmPlan;
+  plan?: CapstanPlan;
   edits: string[];
 }
 
-export async function reviewPlan(ctx: ExtensionContext, plan: SwarmPlan, gate: GateResult, maxSubtasks: number): Promise<ReviewResult> {
+export async function reviewPlan(ctx: ExtensionContext, plan: CapstanPlan, gate: GateResult, maxSubtasks: number): Promise<ReviewResult> {
   let current = plan;
   const edits: string[] = [];
   while (true) {
@@ -16,15 +16,15 @@ export async function reviewPlan(ctx: ExtensionContext, plan: SwarmPlan, gate: G
     if (ctx.mode === "tui") {
       action = await ctx.ui.custom((tui, theme, _keybindings, done) => new PlanComponent(theme, current, gate, (value) => done(value), () => tui.requestRender()));
     } else {
-      const confirmed = await ctx.ui.confirm("Swarm 计划确认", summarizePlan(current, gate));
+      const confirmed = await ctx.ui.confirm("Capstan 计划确认", summarizePlan(current, gate));
       action = confirmed ? "run" : "cancel";
     }
     if (action === "cancel") return { edits };
     if (action === "run") return { plan: current, edits };
-    const edited = await ctx.ui.editor("编辑 SwarmPlan JSON", JSON.stringify(current, null, 2));
+    const edited = await ctx.ui.editor("编辑 CapstanPlan JSON", JSON.stringify(current, null, 2));
     if (!edited) continue;
     try {
-      const candidate = JSON.parse(edited) as SwarmPlan;
+      const candidate = JSON.parse(edited) as CapstanPlan;
       const validation = validatePlan(candidate, maxSubtasks);
       if (!validation.ok) {
         ctx.ui.notify(`计划无效: ${validation.errors.join("; ")}`, "error");
@@ -38,7 +38,7 @@ export async function reviewPlan(ctx: ExtensionContext, plan: SwarmPlan, gate: G
   }
 }
 
-function summarizePlan(plan: SwarmPlan, gate: GateResult): string {
+function summarizePlan(plan: CapstanPlan, gate: GateResult): string {
   return [`判定: ${gate.reason}`, `策略: ${plan.strategy}`, ...plan.subtasks.map((task) => `${task.id} ${task.title} · owns ${task.ownedPaths.join(",")} · deps ${task.dependsOn.join(",") || "-"}`)].join("\n");
 }
 
@@ -46,12 +46,12 @@ class PlanComponent {
   private selected = 0;
   private readonly actions = ["run", "edit", "cancel"] as const;
   private readonly theme: Theme;
-  private readonly plan: SwarmPlan;
+  private readonly plan: CapstanPlan;
   private readonly gate: GateResult;
   private readonly done: (value: "run" | "edit" | "cancel") => void;
   private readonly rerender: () => void;
 
-  constructor(theme: Theme, plan: SwarmPlan, gate: GateResult, done: (value: "run" | "edit" | "cancel") => void, rerender: () => void) {
+  constructor(theme: Theme, plan: CapstanPlan, gate: GateResult, done: (value: "run" | "edit" | "cancel") => void, rerender: () => void) {
     this.theme = theme;
     this.plan = plan;
     this.gate = gate;
@@ -71,7 +71,7 @@ class PlanComponent {
     const w = Math.max(60, Math.min(width, 110));
     const inner = w - 2;
     const row = (value: string) => `${this.theme.fg("border", "│")}${pad(value, inner)}${this.theme.fg("border", "│")}`;
-    const lines = [this.theme.fg("border", `╭${"─".repeat(inner)}╮`), row(` ${this.theme.fg("accent", `SWARM 方案 · ${this.plan.taskSummary}`)}`), row(` 判定: ${this.gate.reason}`), row(` 策略: ${this.plan.strategy}`), row("")];
+    const lines = [this.theme.fg("border", `╭${"─".repeat(inner)}╮`), row(` ${this.theme.fg("accent", `CAPSTAN 方案 · ${this.plan.taskSummary}`)}`), row(` 判定: ${this.gate.reason}`), row(` 策略: ${this.plan.strategy}`), row("")];
     for (const task of this.plan.subtasks) {
       lines.push(row(` ${this.theme.fg("accent", task.id)} ${task.title} · owns ${task.ownedPaths.join(", ")}`));
       lines.push(row(`    deps ${task.dependsOn.join(",") || "-"} · verify ${task.acceptance.commands.join(" && ")}`));

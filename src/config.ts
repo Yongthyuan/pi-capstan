@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { SwarmConfig } from "./types.ts";
+import type { CapstanConfig } from "./types.ts";
 import { pathExists } from "./utils.ts";
 
-export const DEFAULT_CONFIG: SwarmConfig = {
+export const DEFAULT_CONFIG: CapstanConfig = {
   gate: { model: null, ruleThresholdHigh: 5, ruleThresholdLow: 0 },
   planner: {
     model: null,
@@ -22,7 +22,7 @@ export const DEFAULT_CONFIG: SwarmConfig = {
     wallClockMin: 25,
     perAgentBudgetUsd: 2,
     perAgentTokenLimit: 250_000,
-    tools: ["read", "bash", "edit", "write", "grep", "find", "ls", "swarm_send", "swarm_inbox", "swarm_fs"],
+    tools: ["read", "bash", "edit", "write", "grep", "find", "ls", "capstan_send", "capstan_inbox", "capstan_fs"],
     setupCommands: [],
     setupTimeoutSec: 300,
     shareDependencyDirs: ["node_modules"],
@@ -111,16 +111,38 @@ async function readJsonIfPresent(path: string): Promise<unknown> {
   return JSON.parse(raw) as unknown;
 }
 
-export async function loadConfig(agentDir: string, repoRoot: string, configDirName: string): Promise<SwarmConfig> {
+/** Prefer the renamed config file; fall back to the pre-0.10 `swarm.json` location. */
+async function readConfigWithLegacy(primaryPath: string, legacyPath: string): Promise<unknown> {
+  const primary = await readJsonIfPresent(primaryPath);
+  if (primary !== undefined) return primary;
+  const legacy = await readJsonIfPresent(legacyPath);
+  return legacy === undefined ? undefined : migrateLegacyConfig(legacy);
+}
+
+/** Translate only built-in tool identifiers emitted by the pre-0.10 wizard. */
+function migrateLegacyConfig(value: unknown): unknown {
+  if (!isPlainObject(value)) return value;
+  const migrated = structuredClone(value);
+  if (!isPlainObject(migrated.worker) || !Array.isArray(migrated.worker.tools)) return migrated;
+  const toolNames: Record<string, string> = {
+    swarm_send: "capstan_send",
+    swarm_inbox: "capstan_inbox",
+    swarm_fs: "capstan_fs",
+  };
+  migrated.worker.tools = migrated.worker.tools.map((tool) => typeof tool === "string" ? (toolNames[tool] ?? tool) : tool);
+  return migrated;
+}
+
+export async function loadConfig(agentDir: string, repoRoot: string, configDirName: string): Promise<CapstanConfig> {
   let config = structuredClone(DEFAULT_CONFIG);
-  const globalConfig = await readJsonIfPresent(join(agentDir, "swarm.json"));
+  const globalConfig = await readConfigWithLegacy(join(agentDir, "capstan.json"), join(agentDir, "swarm.json"));
   if (globalConfig) config = deepMerge(config, stripMetaKeys(globalConfig));
-  const projectConfig = await readJsonIfPresent(join(repoRoot, configDirName, "swarm.json"));
+  const projectConfig = await readConfigWithLegacy(join(repoRoot, configDirName, "capstan.json"), join(repoRoot, configDirName, "swarm.json"));
   if (projectConfig) config = deepMerge(config, stripMetaKeys(projectConfig));
   return validateConfig(config);
 }
 
-/** Drop documentation-only keys like `$wizard` before merging into SwarmConfig. */
+/** Drop documentation-only keys like `$wizard` before merging into CapstanConfig. */
 function stripMetaKeys(value: unknown): unknown {
   if (!isPlainObject(value)) return value;
   const result: Record<string, unknown> = {};
@@ -131,7 +153,7 @@ function stripMetaKeys(value: unknown): unknown {
   return result;
 }
 
-export function validateConfig(config: SwarmConfig): SwarmConfig {
+export function validateConfig(config: CapstanConfig): CapstanConfig {
   for (const key of ["gate", "planner", "worker", "run", "caseStore", "retention", "ui"] as const) {
     if (!isPlainObject(config[key])) throw new Error(`配置 ${key} 必须是对象`);
   }
