@@ -80,8 +80,8 @@ export class DefaultPluginRegistry implements PluginRegistry {
     // Type-specific validation
     if (type === 'verification') {
       const vStrategy = instance as VerificationStrategy;
-      if (typeof vStrategy.selectCommands !== 'function' && typeof vStrategy.classifyFailure !== 'function' && typeof vStrategy.verify !== 'function') {
-        throw new Error(`Verification plugin must implement selectCommands(), classifyFailure(), or verify()`);
+      if (typeof vStrategy.selectCommands !== 'function' && typeof vStrategy.classifyFailure !== 'function') {
+        throw new Error(`Verification plugin must implement selectCommands() or classifyFailure()`);
       }
     } else if (type === 'scheduling') {
       const sStrategy = instance as SchedulingStrategy;
@@ -89,10 +89,8 @@ export class DefaultPluginRegistry implements PluginRegistry {
         throw new Error(`Scheduling plugin must implement schedule() method`);
       }
     } else if (type === 'collaboration') {
-      const cPrimitive = instance as CollaborationPrimitive;
-      if (typeof cPrimitive.getTools !== 'function') {
-        throw new Error(`Collaboration plugin must implement getTools() method`);
-      }
+      // Collaboration plugins are load-only markers / coordinate hooks.
+      // Custom tools are not injected into workers.
     }
 
     // Initialize if provided

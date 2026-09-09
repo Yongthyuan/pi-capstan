@@ -1,116 +1,106 @@
-# Capstan
+# Capstan · Pi 多智能体编码编排
 
-> **Many hands. One winch. Total control.**
-> 绞盘：一人摇柄，众人推杆，千斤锚分节离底，棘爪落下绝不倒滑。
+**并行修改代码，逐项核对交付。**
 
+[![npm](https://img.shields.io/npm/v/pi-capstan?color=38bdf8)](https://www.npmjs.com/package/pi-capstan)
 [![CI](https://github.com/Yongthyuan/pi-capstan/actions/workflows/ci.yml/badge.svg)](https://github.com/Yongthyuan/pi-capstan/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-58A6FF.svg)](./LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A522.19-3FB950.svg)](./package.json)
-[![Pi](https://img.shields.io/badge/Pi-%E2%89%A50.84.1-8957E5.svg)](https://github.com/badlogic/pi-mono)
+[![MIT](https://img.shields.io/badge/license-MIT-34d399)](./LICENSE)
+[![Pi package](https://img.shields.io/badge/Pi-extension-a78bfa)](https://pi.dev/packages)
 
-[English](./README.md)
+[English](./README.md) · [验证证据](./docs/evidence/v0.11.0/README.md) · [配置](./docs/CONFIGURATION.md)
 
-**Capstan 让多个 AI 编码智能体同时在你的仓库上干活——而方向盘始终在你手里。** 开工前先给你审计划，每个 worker 隔离在独立的 Git worktree 里，花费有硬性上限，只有通过验证的结果才会被合并。它是 [Pi](https://github.com/badlogic/pi-mono) 的扩展，曾用名 *pi-agent-swarm*。
+Capstan 是 [Pi coding agent](https://github.com/earendil-works/pi) 的多智能体编码扩展：先审计划，再让多个 subagent 在独立 Git worktree 中并行工作，最后核对集成分支上的修改、检查结果和提交记录。规划与 worker 复用你在 Pi 中选择的模型及认证。
 
-<!-- 录好演示动图后放到 docs/assets/demo.gif，然后取消注释：
-<p align="center"><img src="docs/assets/demo.gif" alt="Capstan: 计划 → 确认 → 并行 worker → 验证合并" width="720"></p>
--->
-
-## 问题所在
-
-一个 agent 干活慢；五个 agent 一起干是灾难：改同一批文件、互相踩测试、token 花了多少没人知道，半成品直接落到你的分支上。
-
-Capstan 的答案是流水线，而不是放羊：
-
-```text
-/capstan "实现 OAuth 服务端、登录页、测试和文档"
-   │
-   ├─ 1. 门控      琐碎请求？直接单线程跑——不开群，不多花钱
-   ├─ 2. 计划      planner 读取仓库，提出任务 DAG
-   ├─ 3. 确认      你审计划（任务、顺序、验收标准）——此时一分钱没花
-   ├─ 4. 建造      最多 8 个 worker，各自拥有独立 Git worktree 和文件所有权
-   ├─ 5. 验证      worker 产出和合并结果都要通过白名单命令的检查
-   └─ 6. 落地      last-green 结果合并到集成分支；你说了算才发 PR
-```
+![Capstan：审阅计划、并行 worker、候选分支检查与交付证据](./docs/assets/capstan-overview.png)
 
 ## 快速开始
+
+需要 **Node.js ≥22.19、Pi ≥0.84.1**，并在 Git 仓库中使用。
 
 ```bash
 pi install npm:pi-capstan
 ```
 
-重启 Pi，然后正常说话：
+重启 Pi，通过 `/login` 和 `/model` 配置模型，然后运行：
 
 ```text
-/capstan "实现 OAuth 服务端、登录页、测试和文档"
+/capstan "增加 CSV 导出接口，实现下载按钮，并更新接口文档"
 ```
 
-你会先看到计划。批准它，看 worker 在 dashboard 上铺开；拒绝它，一分钱不花。**零配置即可用**——安全默认值始终开启。想调并发、预算或验证时再运行 `/capstan config`；大多数人从来不需要。
+先检查任务拆分、依赖关系和文件归属，批准后 worker 才启动。规划阶段可能已经产生模型用量。用 `/capstan board` 看进度，结束后审阅集成分支和报告，再用 `/capstan pr` 创建 PR。
 
-## 你能得到什么
+无需另存一份 API 密钥。显式模型配置必须能在 Pi 中解析且已认证，配置错误会停止运行。[模型与预算配置 →](./docs/CONFIGURATION.md)
 
-- **没有你的同意，什么都不开工。** 每个 capstan 先产出可审阅的计划并等待确认；拒绝零成本。
-- **worker 永不打架。** 每个任务在自己的 Git worktree 里工作，文件所有权明确声明；越界改动被精确回滚——其余成果原样保留。
-- **花费双重封顶。** worker 级和 run 级的美元与 token 预算会拦住失控回合，而不是给你的账单制造惊喜。
-- **绿色就是真绿。** 结果要过两级验证（任务级 + 集成级），验证命令只允许白名单前缀。
-- **失败只影响局部。** 一个任务挂了不会拖垮独立任务；崩溃的会话从断点恢复；孤儿 worker 会被回收。
-- **小事保持便宜。** 复杂度门控把简单请求路由到单线程模式，不为琐事开群。不服？`--force`。
+## 可以直接核对的特性
 
-## Capstan 与委派类工具的区别
-
-Pi 生态里有优秀的*委派*扩展——父 agent 请子 agent 思考、审查、调研。Capstan 解决的是另一件事：**多个 agent 安全地并行修改你的仓库。**
-
-| | 委派式 subagents | Capstan |
+| 特性 | 解决的问题 | 实现与验证 |
 |---|---|---|
-| 擅长 | 思考、审查、答疑 | 建造——并行改代码 |
-| 隔离 | 共享工作区，因工具而异 | 每任务独立 worktree，强制执行 |
-| 成本 | 通常无人统计 | 硬预算 + 实时记账 |
-| 落地 | 模型做了什么就是什么 | 验证后 branch 优先合并，由你掌控 |
+| 人工审批计划 | 开工前审阅任务依赖、文件归属 | [计划校验](./src/plan-validation.ts) · [生命周期测试](./test/worker-orchestrator.test.ts) |
+| 独立 Git worktree | 分开并行 worker 的工作区，并限制修改范围 | [工作区实现](./src/workspace.ts) · [范围与安全测试](./test/resilience-security.test.ts) |
+| 候选分支晋升 | 先在 candidate 合并、检查，再推进集成分支 | [编排器](./src/orchestrator.ts) · [恢复测试](./test/recovery-hardening.test.ts) |
+| 带验证证据的 PR | 逐项列出任务检查、提交 SHA、最终检查和待复核项 | [PR 示例](./docs/evidence/v0.11.0/after-pr.md) · [报告测试](./test/reporter.test.ts) |
+| 用量预算与恢复 | 统计用量、限制后续执行，恢复中断的 run | [配置](./docs/CONFIGURATION.md) · [状态存储](./src/state.ts) |
+| Pi 原生模型选择 | 规划与 worker 使用 Pi 已配置的供应商及认证 | [模型策略](./src/model-policy.ts) · [模型测试](./test/model-policy.test.ts) |
 
-## 命令
+适合能按文件或模块拆分、且具有有效项目检查的任务。Git worktree 分离 Git 状态，不提供操作系统级安全沙箱；预算控制依赖已返回的用量，美元费用是估算值。
+
+## v0.11.0 前后对比
+
+**同一输入，核对交付结论。** 将固定的合成 run 分别交给已发布 v0.10.0 和新版报告器：两个任务均已合入，但任务、候选分支、最终集成的检查全部跳过。
+
+![前后对比：旧版报告完整，新版明确验证不完整并要求复核](./docs/assets/verification-before-after.png)
+
+| 项目 | v0.10.0 | v0.11.0 |
+|---|---|---|
+| 所有检查跳过 | PR 仍写 “Merged verified subtasks” 和 “Result: complete” | 明确 “verification incomplete”，列出待复核原因 |
+| 最终检查缺失 | 根据 run 状态标记结果完整 | 缺少证据时不能给出完整验证成功结论 |
+| 审阅内容 | 已合入任务名称 | 各任务检查、candidate/晋升 SHA、最终集成检查 |
+| 本地自动测试 | 已发布 tag 上 61 项通过 | 此次发布 80 项通过 |
+
+这是可复现的报告行为对照，**不是模型性能提升测评**。两版测试数量来自不同测试集，不代表覆盖率。[输入、原始输出、正向对照与复现方法 →](./docs/evidence/v0.11.0/README.md)
+
+另有一次真实 DeepSeek 冒烟：从失败测试开始，两个 Pi worker 实现两个小模块，集成分支测试通过；**17 个 worker 回合、21,532 个 token，估算 $0.0208**。它来自已记录的开发源码快照，只是一项合成任务。此前规划冒烟完成 **4/10 案例**，后续 OAuth 计划仍因不安全命令语法被拒绝；复杂规划仍有局限。[完整验收记录 →](./docs/validation-2026-09-09.md)
+
+## 常用命令
 
 ```text
-/capstan "任务"                      启动 capstan（可加 --force --max 4 --best-of 2 --plan-only）
-/capstan board                       实时看板
-/capstan pause | resume | abort      控制运行中的 capstan
-/capstan replan                       运行中追加任务
-/capstan merge | clean | replay      落地或清理已结束的 run
-/capstan pr [runId]                  推送集成分支并创建 PR
-/capstan cases                       浏览/评分历史 run（改进未来规划）
-/capstan config | validate | status  配置、检查配置、查看状态
+/capstan "任务"                       提出计划，审批后启动
+/capstan "任务" --plan-only           只看计划
+/capstan board                       查看进度
+/capstan pause | resume | abort       控制运行
+/capstan replan                       提议追加任务
+/capstan merge | clean | replay       管理已结束的运行
+/capstan pr [runId]                   推送集成分支并创建 PR
+/capstan config | validate | status   配置、校验和状态
+/capstan cases                       查看和评价历史运行
 ```
 
-程序化委派同样是一等公民：Pi 主模型可以调用 `capstan_delegate` 工具，它走的和其他一切一样的计划确认门。
+Pi 还可以通过 `capstan_delegate` 工具进入同一审批流程。支持 `--force`、`--max 4`、`--best-of 2` 等选项，详见[命令文档](./docs/README.md)。
 
-## 安全默认值（始终开启）
+## 文档与开发
 
-Branch 优先落地（绝不自动 apply 到主工作区） · 计划确认门 · worker 与 run 双级美元/token 预算 · 越界自动回滚 · 两级验证 + 命令前缀白名单 · worker 扩展隔离 · 日志与案例库凭据脱敏 · 原子状态写入与断点恢复。
-
-Git worktree 隔离的是并发冲突，而不是恶意代码。信任你的仓库，这套默认值就足够兜底；不信任？请把 Capstan 关进容器里运行。
-
-## 文档
-
-- **[docs/README.md](./docs/README.md)** — 从这里开始：快速参考与常见模式
-- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** — 全部 51 个配置键（等你超出默认需求再看）
-- **[docs/DESIGN_PHILOSOPHY.md](./docs/DESIGN_PHILOSOPHY.md)** — 为什么这样设计
-- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** · **[docs/PLUGINS.md](./docs/PLUGINS.md)** — guard 与插件
-- **[docs/examples/](./docs/examples/)** — 可直接复制的配置和插件示例
-
-## 开发
+- [交付证据](./docs/EVIDENCE.md)：Proof-Carrying PR 指随附检查记录，不是形式化证明
+- [配置说明](./docs/CONFIGURATION.md)：模型、并发、预算、验证与合并策略
+- [设计](./docs/DESIGN_PHILOSOPHY.md) · [扩展](./docs/EXTENSION_POINTS.md) · [插件](./docs/PLUGINS.md)
+- [示例](./docs/examples/README.md) · [基准协议](./scripts/bench/README.md) · [更新日志](./CHANGELOG.md)
 
 ```bash
+git clone https://github.com/Yongthyuan/pi-capstan.git
+cd pi-capstan
 npm ci
-npm run check        # 类型 + 语法
-npm test             # 单元测试
-npm run test:native  # 真实 Pi RPC 冒烟
+npm run check
+npm test
+npm run test:native       # 离线：Pi 命令注册与受限 worker 启动
+npm run evidence:compare  # 离线：重新生成前后对比
+pi -e ./index.ts
 ```
 
-CI 在每次 push 时跑 Linux + Windows 矩阵，另有每日跨平台 soak。
+真实模型验收会产生供应商用量，按需执行：
 
-## 为什么叫 Capstan
+```bash
+PI_CAPSTAN_TEST_MODEL=deepseek/deepseek-v4-flash npm run test:native:e2e
+```
 
-绞盘能把一个人的拉力放大成数吨的可控力量，而棘爪保证载荷永不倒滑。多只手（并行 worker），一个绞盘（编排器），完全可控（门控、预算、计划确认、可回退合并）。
+CI 在 push 时检查 Linux 与 Windows，另有定期 soak。当前 UI 中英文混用。欢迎在 [Issues](https://github.com/Yongthyuan/pi-capstan/issues) 中附上任务、版本、模型/供应商、检查结果及脱敏复现步骤。
 
-## 许可证
-
-[MIT](./LICENSE)
+Capstan 意为绞盘，曾用名 `pi-agent-swarm`。[MIT 许可证](./LICENSE)。

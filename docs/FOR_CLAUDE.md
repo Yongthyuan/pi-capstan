@@ -86,7 +86,7 @@ For production-quality work, set an explicit `run.verify.full` array of allowlis
 Do not write plugins unless the user asks. If they do:
 
 - Point `run.verificationStrategy` at a real module path (see `examples/plugins/incremental-verifier.ts`).
-- The plugin may narrow commands via `selectCommands`. The runtime still executes them through the allowlist. `verify()` is not called.
+- The plugin may narrow commands via `selectCommands`. The runtime still executes them through the allowlist.
 - Scheduling plugins only change **concurrency width**. They do not reorder the DAG.
 - Collaboration plugins currently **do not** inject worker tools.
 

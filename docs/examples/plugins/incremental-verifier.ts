@@ -9,9 +9,7 @@
  * 3. Return a narrower command list from selectCommands
  *
  * The runtime then runs those commands through verifyCommands (allowlist + shell:false).
- * `verify()` is not called.
- *
- * Usage in .pi/capstan.json:
+ * * Usage in .pi/capstan.json:
  * {
  *   "run": {
  *     "verificationStrategy": "~/.pi/agent/plugins/incremental-verifier.js"
@@ -24,7 +22,7 @@ import { promisify } from 'node:util';
 import { readFile } from 'node:fs/promises';
 import { join, relative, extname } from 'node:path';
 import type { VerificationStrategy } from '../../../src/plugins/interfaces.ts';
-import type { Subtask, VerificationResult } from '../../../src/types.ts';
+import type { Subtask } from '../../../src/types.ts';
 
 const execFileAsync = promisify(execFile);
 
@@ -68,48 +66,6 @@ export default class IncrementalVerifier implements VerificationStrategy {
     const testCommands = await this.buildTestCommands(worktreePath, affectedTests);
 
     return testCommands;
-  }
-
-  async verify(task: Subtask, worktreePath: string, commands: string[]): Promise<VerificationResult> {
-    // The runtime does not call verify(); it runs selected commands through verifyCommands.
-    // Kept so the example still type-checks against the interface.
-    if (!commands.length) return { ok: true, skipped: true, commands: [] };
-    const results = [];
-
-    for (const command of commands) {
-      const [cmd, ...args] = command.split(' ');
-      const startTime = Date.now();
-
-      try {
-        const { stdout, stderr } = await execFileAsync(cmd, args, {
-          cwd: worktreePath,
-          timeout: 300000,
-          maxBuffer: 10 * 1024 * 1024,
-        });
-
-        results.push({
-          command,
-          exitCode: 0,
-          stdout,
-          stderr,
-          durationMs: Date.now() - startTime,
-          timedOut: false,
-        });
-      } catch (error: unknown) {
-        const err = error as { code?: number; stdout?: string; stderr?: string; killed?: boolean };
-        results.push({
-          command,
-          exitCode: err.code ?? 1,
-          stdout: err.stdout ?? '',
-          stderr: err.stderr ?? '',
-          durationMs: Date.now() - startTime,
-          timedOut: err.killed ?? false,
-        });
-      }
-    }
-
-    const ok = results.every((r) => r.exitCode === 0);
-    return { ok, commands: results };
   }
 
   async classifyFailure(

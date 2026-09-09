@@ -3,9 +3,11 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runCommand } from "../src/utils.ts";
+import { buildRepoBrief, plannerPrompt } from "../src/planner.ts";
 
 const model = process.env.PI_CAPSTAN_TEST_MODEL;
 if (!model) throw new Error("PI_CAPSTAN_TEST_MODEL is required");
+const task = "Create alpha.txt and beta.txt as two fully independent worker tasks. Each task owns only its exact file and uses true as its acceptance command.";
 
 const root = await mkdtemp(join(tmpdir(), "pi-capstan-plan-"));
 const repo = join(root, "repo");
@@ -22,12 +24,17 @@ let child;
 try {
   await writeFile(join(repo, "README.md"), "# Planner smoke\n\nThe repository intentionally has two independent requested marker files.\n");
   await mkdir(join(repo, ".pi"), { recursive: true });
-  await writeFile(join(repo, ".pi", "capstan.json"), `${JSON.stringify({ run: { verifyAllowedPrefixes: ["true"] } }, null, 2)}\n`);
+  await writeFile(join(repo, ".pi", "capstan.json"), `${JSON.stringify({ caseStore: { enabled: false }, planner: { tokenLimit: 16000 }, run: { verifyAllowedPrefixes: ["true"] } }, null, 2)}\n`);
   await git(["init", "-q"]);
   await git(["config", "user.email", "test@example.invalid"]);
   await git(["config", "user.name", "Pi Capstan Test"]);
   await git(["add", "README.md", ".pi/capstan.json"]);
   await git(["commit", "-qm", "initial"]);
+
+  if (process.argv.includes("--dry-run")) {
+    const brief = await buildRepoBrief(repo, task);
+    process.stdout.write(plannerPrompt(task, brief, [], 6, [model], ["true"]));
+  } else {
 
   child = spawn(process.env.PI_CAPSTAN_PI_BIN ?? "pi", [
     "--mode", "rpc",
@@ -73,7 +80,7 @@ try {
   const prompt = await request({
     id: "plan",
     type: "prompt",
-    message: "/capstan \"Create alpha.txt and beta.txt as two fully independent worker tasks. Each task owns only its exact file and uses true as its acceptance command.\" --force --plan-only",
+    message: `/capstan "${task}" --force --plan-only`,
   });
   if (!prompt.success) throw new Error(`plan command failed: ${JSON.stringify(prompt)}`);
 
@@ -97,6 +104,7 @@ try {
   }
   if (state.outcome !== "planned" || state.plan?.subtasks?.length !== 2) throw new Error(`unexpected planner state: ${JSON.stringify(state)}`);
   process.stdout.write(`native provider-backed planner ok: ${model}, subtasks=${state.plan.subtasks.length}\n`);
+  }
 } finally {
   if (child) {
     child.stdin.end();

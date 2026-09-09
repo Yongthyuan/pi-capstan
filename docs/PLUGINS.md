@@ -2,7 +2,7 @@
 
 > 插件是**可选表面**，不是主产品。主路径是计划 `acceptance.commands` + `run.verify`。
 >
-> 诚实限制：验证插件已接到 worker 验收（含真实 git porcelain diff 与 `classifyFailure`）；调度插件只调节并发宽度；协作插件会加载但**不会**把 `getTools()` 注入 worker。
+> 诚实限制：验证插件已接到 worker 验收（含真实 git porcelain diff 与 `classifyFailure`）；调度插件只调节并发宽度；协作插件会加载，可通过 `coordinate()` 挂钩，但**不会**向 worker 注入自定义 tools（工人仍用 `capstan_send` / `capstan_inbox`）。
 
 ## 核心理念
 
@@ -32,13 +32,6 @@ interface VerificationStrategy {
     worktreePath: string,
     changes: { modified: string[]; added: string[]; deleted: string[] }
   ): Promise<string[] | null>;
-  
-  // 运行时不会调用。选中的命令一律走 verifyCommands（语法门 + 前缀 allowlist）
-  verify?(
-    task: Subtask,
-    worktreePath: string,
-    commands: string[]
-  ): Promise<VerificationResult>;
   
   // 分类失败并决定重试策略
   classifyFailure?(
@@ -131,13 +124,7 @@ interface SchedulingStrategy {
 
 ### 3. 协作原语（Collaboration Primitive）
 
-为 workers 添加自定义工具和协调机制。
-
-**用途**：
-- 共享键值存储
-- 请求-响应协议
-- Barrier 同步
-- 发布-订阅消息
+加载协作钩子；**不会**向 worker 注入自定义 tools。工人仍用 `capstan_send` / `capstan_inbox`。
 
 **接口**：
 ```typescript
@@ -146,15 +133,7 @@ interface CollaborationPrimitive {
   description: string;
   version: string;
   
-  // 返回要注入到 worker 的工具
-  getTools(): Array<{
-    name: string;
-    description: string;
-    inputSchema: object;
-    handler: (input: object, workerId: string) => Promise<unknown>;
-  }>;
-  
-  // 处理跨 worker 协调请求
+  // 处理跨 worker 协调请求（可由宿主把 mailbox 消息转发进来）
   coordinate?(request: {
     from: string;
     to?: string;
@@ -164,19 +143,14 @@ interface CollaborationPrimitive {
 }
 ```
 
-**示例**：共享 KV 存储（`docs/examples/plugins/shared-kv-store.ts`）
-- `capstan_kv_set(key, value, ttl?)` - 设置键值
-- `capstan_kv_get(key)` - 获取值
-- `capstan_kv_list(prefix?)` - 列出所有键
-- `capstan_kv_delete(key)` - 删除键
-- `capstan_kv_watch(key)` - 等待键被设置（barrier 原语）
+**示例**：共享 KV 存储（`docs/examples/plugins/shared-kv-store.ts`）通过 `coordinate({ type: "kv.set" | "kv.get" | ... })` 工作。
 
 **配置**：
 ```json
 {
   "run": {
     "collaborationPrimitives": [
-      "~/.pi/agent/plugins/shared-kv-store.js"
+      "/absolute/path/to/shared-kv-store.ts"
     ]
   }
 }
@@ -187,30 +161,20 @@ interface CollaborationPrimitive {
 ### 步骤 1：创建插件文件
 
 ```typescript
-// ~/.pi/agent/plugins/my-plugin.ts
-import type { VerificationStrategy, Subtask, VerificationResult } from 'pi-capstan';
+// /absolute/path/my-verifier.ts
+import type { VerificationStrategy } from 'pi-capstan';
+import type { Subtask } from 'pi-capstan';
 
 export default class MyVerifier implements VerificationStrategy {
   readonly name = 'my-verifier';
   readonly description = '我的自定义验证器';
   readonly version = '1.0.0';
   
-  async initialize(config: Record<string, unknown>): Promise<void> {
-    // 初始化逻辑
+  async selectCommands(task: Subtask, worktreePath: string, changes: { modified: string[]; added: string[]; deleted: string[] }) {
+    return null; // use defaults
   }
   
-  async verify(
-    task: Subtask,
-    worktreePath: string,
-    commands: string[]
-  ): Promise<VerificationResult> {
-    // 验证逻辑
-    return { ok: true, commands: [] };
-  }
-  
-  async cleanup(): Promise<void> {
-    // 清理逻辑
-  }
+  async cleanup(): Promise<void> {}
 }
 ```
 
@@ -296,26 +260,7 @@ readonly version = '1.0.0'; // 语义化版本
 
 ### 2. 健壮的错误处理
 
-```typescript
-async verify(...): Promise<VerificationResult> {
-  try {
-    // 验证逻辑
-  } catch (error) {
-    // 返回失败结果而不是抛出异常
-    return {
-      ok: false,
-      commands: [{
-        command: '...',
-        exitCode: 1,
-        stdout: '',
-        stderr: String(error),
-        durationMs: 0,
-        timedOut: false,
-      }],
-    };
-  }
-}
-```
+`selectCommands` / `classifyFailure` 应返回明确结果；不要抛出未捕获异常淹没 orchestrator。运行时验证始终走 `verifyCommands`。
 
 ### 3. 可配置参数
 

@@ -1,0 +1,189 @@
+{
+  "startedAt": "2026-09-09T15:49:22.108Z",
+  "capturedAt": "2026-09-09T15:52:25.138Z",
+  "source": {
+    "head": "4840524d189d825bf21880d32a8429344bee53c7",
+    "contentSha256": "c52e00b60d0fdefe1d3ac54dcd3cb8493080628afdf0950dfc960ae26d1789c9",
+    "dirty": true
+  },
+  "taskId": "T02-oauth-split",
+  "fixture": "ts-monorepo",
+  "taskSha256": "d85287c16af106291dcd86d9243dc9efed7f9fd1a80265dba128f29b10756a64",
+  "model": "deepseek/deepseek-v4-flash",
+  "config": {
+    "gate": {
+      "model": "deepseek/deepseek-v4-flash",
+      "ruleThresholdHigh": 5,
+      "ruleThresholdLow": 0
+    },
+    "planner": {
+      "model": "deepseek/deepseek-v4-flash",
+      "maxSubtasks": 6,
+      "repoMapTokens": 4500,
+      "schemaRetries": 0,
+      "timeoutSec": 240,
+      "budgetUsd": 1,
+      "tokenLimit": 32000
+    },
+    "worker": {
+      "model": "deepseek/deepseek-v4-flash",
+      "maxConcurrency": 4,
+      "maxRetries": 2,
+      "stallSec": 180,
+      "wallClockMin": 25,
+      "perAgentBudgetUsd": 2,
+      "perAgentTokenLimit": 250000,
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write",
+        "grep",
+        "find",
+        "ls",
+        "capstan_send",
+        "capstan_inbox",
+        "capstan_fs"
+      ],
+      "setupCommands": [],
+      "setupTimeoutSec": 300,
+      "shareDependencyDirs": [
+        "node_modules"
+      ],
+      "scopeAllowlist": [
+        "package-lock.json",
+        "npm-shrinkwrap.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+        "bun.lock",
+        "bun.lockb",
+        "Cargo.lock",
+        "poetry.lock",
+        "uv.lock"
+      ],
+      "scopeViolationPolicy": "revert",
+      "strictBash": false,
+      "bestOfN": 1,
+      "bestOfNJudge": true
+    },
+    "run": {
+      "budgetUsd": 8,
+      "tokenLimit": 1000000,
+      "mergeStrategy": "branch",
+      "verify": {
+        "worker": null,
+        "integrationLight": null,
+        "full": null
+      },
+      "verifyTimeoutSec": 300,
+      "verifyAllowedPrefixes": [
+        "npm test",
+        "npm run",
+        "npm exec --no --",
+        "pnpm test",
+        "pnpm run",
+        "pnpm exec",
+        "yarn test",
+        "yarn run",
+        "yarn exec",
+        "bun test",
+        "bun run",
+        "python -m pytest",
+        "python3 -m pytest",
+        "pytest",
+        "cargo test",
+        "cargo check",
+        "cargo build",
+        "cargo clippy",
+        "go test",
+        "go build",
+        "go vet",
+        "./gradlew test",
+        "./gradlew check",
+        "./gradlew build",
+        "mvn test",
+        "mvn verify",
+        "dotnet test",
+        "dotnet build",
+        "./node_modules/.bin/tsc",
+        "true",
+        "python",
+        "python3",
+        "node --test"
+      ],
+      "setupAllowedPrefixes": [
+        "npm ci",
+        "npm install",
+        "pnpm install",
+        "yarn install",
+        "bun install",
+        "python -m pip install",
+        "python3 -m pip install",
+        "uv sync",
+        "cargo fetch"
+      ],
+      "failurePolicy": "continue-independent",
+      "verificationStrategy": null,
+      "schedulingStrategy": null,
+      "collaborationPrimitives": []
+    },
+    "approvalPolicy": "route",
+    "bashDenylist": [
+      "\\bgit\\b[^\\n]*(?:\\s)(?:add|am|apply|bisect|branch|checkout|cherry-pick|clean|commit|merge|mv|push|rebase|reset|restore|revert|rm|switch|tag|update-index|update-ref|worktree)\\b",
+      "\\bsudo\\b",
+      "\\brm\\b[^\\n]*\\s-rf\\s+[/~]",
+      "\\b(?:curl|wget)\\b[^|\\n]*\\|\\s*(?:sh|bash|zsh)\\b",
+      "(?:^|[;&|]\\s*)(?:rm|mv|cp|touch|mkdir|install|ln|truncate|dd|tee)\\b",
+      "\\b(?:sed\\s+-[^\\n]*i|perl\\s+-[^\\n]*i)\\b",
+      "(?:^|[^<])>{1,2}(?:[^>]|$)"
+    ],
+    "caseStore": {
+      "enabled": false,
+      "max": 200,
+      "threshold": 0.35,
+      "matcher": "hybrid"
+    },
+    "retention": {
+      "logsDays": 14,
+      "sessionsDays": 30
+    },
+    "ui": {
+      "renderThrottleMs": 250,
+      "reportTriggerTurn": false,
+      "approvalBatchMs": 100
+    },
+    "safetyGuardPath": null
+  },
+  "expected": {
+    "minSubtasks": 2,
+    "maxSubtasks": 5,
+    "expectContracts": true
+  },
+  "outcome": "error",
+  "error": "计划校验失败:\ndocs_worker.acceptance.commands 含不安全 shell 语法",
+  "failClass": "schema_invalid",
+  "golden": null,
+  "calls": [
+    {
+      "wallMs": 182523,
+      "stopReason": "stop",
+      "textChars": 5557,
+      "reasoningEffort": "high",
+      "maxTokens": 32000
+    }
+  ],
+  "responses": [
+    {
+      "usage": {
+        "input": 126,
+        "output": 22217,
+        "cacheRead": 1536,
+        "cacheWrite": 0,
+        "cost": 0.029403384
+      },
+      "model": "deepseek/deepseek-v4-flash",
+      "stopReason": "stop"
+    }
+  ],
+  "estimatedCostUsd": 0.029403384
+}

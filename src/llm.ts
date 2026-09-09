@@ -1,4 +1,5 @@
 import type { GateModel } from "./gate.ts";
+import { resolvePiModel } from "./model-policy.ts";
 import type { CapstanConfig, CapstanPlan, UsageTotals } from "./types.ts";
 import { makeRunId } from "./utils.ts";
 
@@ -7,6 +8,7 @@ export interface PiModelLike {
   id: string;
   name?: string;
   cost?: Record<string, number>;
+  maxTokens?: number;
 }
 
 export interface ModelContextLike {
@@ -36,6 +38,10 @@ export class PiLlmClient implements GateModel {
     return this.ctx.modelRegistry.getAvailable().filter((model) => this.ctx.modelRegistry.hasConfiguredAuth(model));
   }
 
+  workerModels(): PiModelLike[] {
+    return [resolvePiModel(this.ctx, this.config.worker.model)];
+  }
+
   async classify(task: string, repoSummary: string, ruleHits: string[]) {
     return this.completeJson<{ complexity: number; parallelizable: boolean; reason: string; estSubtasks: number }>(
       this.config.gate.model,
@@ -57,27 +63,40 @@ export class PiLlmClient implements GateModel {
   }
 
   private async completeJson<T>(modelSpec: string | null, prompt: string, reasoningEffort: string): Promise<T> {
-    const model = this.resolveModel(modelSpec);
-    if (!model)
-      throw new Error(
-        `No authenticated model available${modelSpec ? ` for ${modelSpec}` : ""}. Fix: open Pi, pick a model with /model and complete provider sign-in, then retry.\n没有可用且已认证的模型——请在 Pi 中用 /model 选择模型并完成认证后重试。`,
+    const model = resolvePiModel(this.ctx, modelSpec);
+    const maxTokens = Math.min(this.config.planner.tokenLimit, model.maxTokens ?? Infinity);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.config.planner.timeoutSec * 1_000);
+    const timeoutError = () => new Error(`Planner timeout after ${this.config.planner.timeoutSec}s.`);
+    let response;
+    try {
+      response = await this.ctx.modelRegistry.complete(
+        model,
+        { messages: [{ role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() }] },
+        {
+          ...(reasoningEffort === "off" ? {} : { reasoningEffort }),
+          signal: controller.signal,
+          cacheRetention: "none",
+          sessionId: makeRunId(),
+          timeoutMs: this.config.planner.timeoutSec * 1_000,
+          maxTokens,
+          maxRetries: 1,
+        },
       );
-    const response = await this.ctx.modelRegistry.complete(
-      model,
-      { messages: [{ role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() }] },
-      {
-        reasoningEffort,
-        cacheRetention: "none",
-        sessionId: makeRunId(),
-        timeoutMs: this.config.planner.timeoutSec * 1_000,
-        maxTokens: this.config.planner.tokenLimit,
-        maxRetries: 1,
-      },
-    );
+    } catch (error) {
+      if (controller.signal.aborted) throw timeoutError();
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
     const usage = normalizeUsage(response.usage);
     await this.onUsage?.(usage, { model: `${model.provider}/${model.id}`, stopReason: response.stopReason });
+    if (controller.signal.aborted) throw timeoutError();
     if (response.stopReason === "error" || response.stopReason === "aborted") {
       throw new Error(response.errorMessage ?? `planner model ${response.stopReason}`);
+    }
+    if (response.stopReason === "length") {
+      throw new Error(`Planner output token limit reached (${maxTokens}, including model reasoning). Increase planner.tokenLimit before retrying.`);
     }
     const text = response.content.filter((part) => part.type === "text").map((part) => part.text ?? "").join("\n").trim();
     try {
@@ -87,15 +106,6 @@ export class PiLlmClient implements GateModel {
     }
   }
 
-  private resolveModel(spec: string | null): PiModelLike | undefined {
-    if (spec) {
-      const slash = spec.indexOf("/");
-      if (slash > 0) return this.ctx.modelRegistry.find(spec.slice(0, slash), spec.slice(slash + 1).replace(/:(?:off|minimal|low|medium|high|xhigh|max)$/, ""));
-      return this.availableModels().find((model) => model.id === spec || model.name === spec);
-    }
-    if (this.ctx.model && this.ctx.modelRegistry.hasConfiguredAuth(this.ctx.model)) return this.ctx.model;
-    return this.availableModels()[0];
-  }
 }
 
 function normalizeUsage(usage: any): UsageTotals {

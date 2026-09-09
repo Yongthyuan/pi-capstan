@@ -228,7 +228,7 @@ export async function createPlan(
   llm: PiLlmClient,
   config: CapstanConfig,
 ): Promise<CapstanPlan | { recommend: "solo"; reason: string }> {
-  const prompt = plannerPrompt(task, brief, cases, config.planner.maxSubtasks, llm.availableModels().map((model) => `${model.provider}/${model.id}`), config.run.verifyAllowedPrefixes);
+  const prompt = plannerPrompt(task, brief, cases, config.planner.maxSubtasks, llm.workerModels().map((model) => `${model.provider}/${model.id}`), config.run.verifyAllowedPrefixes);
   let result: CapstanPlan | { recommend: "solo"; reason: string } | undefined;
   let repairRaw = "";
   let repairErrors: string[] = [];

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.0 — Reviewable parallel delivery (2026-09-10)
+
+- Delivery reports and PRs now distinguish recorded passes from skipped or missing verification. Final integration evidence is persisted; PR bodies include task checks, candidate/promotion SHAs, review requirements, and redacted fields.
+- Planner calls abort at their wall-clock deadline. Disabled reasoning is omitted from the provider request; output exhaustion is classified separately instead of triggering the same JSON repair repeatedly.
+- Worker models resolve against Pi at launch. Gate, planner, workers, and benchmark tooling use Pi model selection/authentication; explicit missing models fail without a provider fallback. Integration fixers are restricted to participating tasks' authorized paths and checked before commit.
+- Serialized state writes, merges, user interactions, and setup operations share a tested queue primitive that continues after rejected work.
+- Added a planning catalog, fixed smoke cases, source/config identities, and attempt-preserving metrics. Retries cannot mix models or source snapshots. Added a native Pi E2E that implements two modules from failing tests and records the integrated result.
+- **Plugin API cleanup:** removed declared plugin hooks the runtime did not invoke. The supported surface and examples now match actual runtime calls; update custom TypeScript plugins using removed members.
+- Rebuilt English/Chinese READMEs with feature-to-source links, workflow artwork, and a reproducible v0.10.0/v0.11.0 reporting comparison. Added `pi-package` discovery metadata and a Pi gallery image. Published raw development smoke artifacts with explicit limitations.
+- Validation: local type/syntax checks; 80/80 tests (published v0.10.0: 61/61). The recorded two-worker DeepSeek E2E passed on the development core snapshot. Earlier planner smoke completed 4/10 cases; an OAuth follow-up was rejected for unsafe syntax. No general planning-quality improvement is claimed.
+- UI remains mixed English/Chinese; the previously planned full i18n is not included. [Release evidence](./docs/evidence/v0.11.0/README.md).
+
 ## 0.10.0 — Functional identifier rename
 
 - **Breaking:** renamed the command surface from `/swarm` to `/capstan` and the delegation tool from `swarm_delegate` to `capstan_delegate`.

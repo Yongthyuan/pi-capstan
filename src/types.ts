@@ -213,6 +213,8 @@ export interface CapstanRun {
   merged: string[];
   conflicts: ConflictRecord[];
   gitOperations?: GitMergeOperation[];
+  /** Persisted full-lane evidence; absent on legacy runs means unknown. */
+  finalVerification?: VerificationResult;
   totals: UsageTotals & { wallSec: number; turns: number };
   outcome?: "planned" | "applied" | "branch" | "committed" | "aborted" | "failed";
   caseId?: string;

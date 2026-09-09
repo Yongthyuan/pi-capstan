@@ -116,17 +116,17 @@ export default function(pi: ExtensionAPI) {
 ## 2. Verification Strategies (Optional, worker lane)
 
 The runtime already wires `selectCommands` (real git porcelain) and `classifyFailure`.
-Selected commands always execute through `verifyCommands` — plugins cannot bypass the syntax gate or prefix allowlist. `verify()` is not called.
+Selected commands always execute through `verifyCommands` — plugins cannot bypass the syntax gate or prefix allowlist.
 
 Empty command lists are **跳过**, not a green pass.
 
 ## 3. Scheduler Strategies (Optional, concurrency only)
 
-`schedule().batches` is advisory **width**. DAG order stays `dependsOn`. `adjust()` is not called at startup.
+`schedule().batches` is advisory **width**. DAG order stays `dependsOn`. `adjust()` is reserved for metric-driven concurrency (not yet snapshotted into the runtime).
 
 ## 4. Coordination Primitives (Loaded, not injected)
 
-Collaboration plugins may load. Their `getTools()` are **not** injected. Workers use `capstan_send` / `capstan_inbox`.
+Collaboration plugins may load and implement `coordinate()`. Custom tools are **not** injected. Workers use `capstan_send` / `capstan_inbox`.
 
 ## 5. Task Templates (Planned)
 
@@ -182,7 +182,7 @@ If you implement a reusable extension (custom tool or plugin):
 |----------------|--------|
 | Custom Guards | Available |
 | Configuration | Available (51 leaf keys) |
-| Verification plugin | Optional; `selectCommands` + `classifyFailure`; `verify()` unused |
+| Verification plugin | Optional; `selectCommands` + `classifyFailure` |
 | Scheduling plugin | Optional; concurrency width only |
-| Collaboration plugins | Load only; tools not injected |
+| Collaboration plugins | Load + optional `coordinate`; tools not injected |
 | Task Templates | Planned; copy example configs |

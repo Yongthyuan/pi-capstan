@@ -1,0 +1,5 @@
+
+> pi-capstan@0.11.0 check
+> tsc --noEmit && node scripts/check-syntax.mjs
+
+syntax ok: 50 TypeScript files

@@ -1,0 +1,36 @@
+{
+  "capturedAt": "2026-09-09T15:46:20.173Z",
+  "scenario": "two-modules-from-failing-tests",
+  "model": "deepseek/deepseek-v4-flash",
+  "fixtureSha256": "9aa51ef3643c59d477c77bf8a644b072d564e3c32eda809b63b96578a3290c63",
+  "source": {
+    "head": "4840524d189d825bf21880d32a8429344bee53c7",
+    "contentSha256": "c52e00b60d0fdefe1d3ac54dcd3cb8493080628afdf0950dfc960ae26d1789c9",
+    "dirty": true
+  },
+  "phase": "done",
+  "outcome": "branch",
+  "workers": 2,
+  "turns": 17,
+  "tokens": 21532,
+  "estimatedCostUsd": 0.020755776,
+  "changedFiles": [
+    "src/slug.mjs",
+    "src/unique.mjs"
+  ],
+  "initialTestsFailed": true,
+  "landedTestsPassed": true,
+  "finalVerification": [
+    {
+      "command": "npm test",
+      "exitCode": 0
+    }
+  ],
+  "promotions": [
+    {
+      "preMergeSha": "73376978d68e9d9cf63ec17d7ab39d88e242e47e",
+      "postMergeSha": "499064a34f0eb9b4a0a5b3ef329eee5a1d1cd97d",
+      "phase": "promoted"
+    }
+  ]
+}

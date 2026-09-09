@@ -1,0 +1,22 @@
+{
+  "version": "0.11.0-baseline-100",
+  "taskCount": 100,
+  "fixtureCount": 6,
+  "fullCases": 104,
+  "smokeCases": 10,
+  "coreCases": 36,
+  "byCategory": {
+    "split_independent": 4,
+    "contracts": 16,
+    "dep_chain": 16,
+    "solo_correct": 8,
+    "rename_refactor": 7,
+    "docs_meta": 8,
+    "tests": 5,
+    "bugfix": 4,
+    "path_scope": 2,
+    "adversarial": 19,
+    "feature": 9,
+    "cross_lang": 2
+  }
+}

@@ -12,6 +12,16 @@ Later wins:
 
 Also valid run flags (not config merge): `--force`/`-f`, `--solo`, `--plan-only`/`-n`. Unknown flags become task text.
 
+## Models and authentication
+
+Capstan is a Pi extension. Gate and planner calls use Pi's `modelRegistry`; workers are Pi RPC subprocesses sharing the same Pi authentication and model configuration. API keys and provider endpoints belong in Pi (`/login`, `/model`, `auth.json`, `models.json`), never in `capstan.json`.
+
+- A `null` model inherits the current Pi session. Worker launches pin the resolved provider/model so another global default cannot silently take over.
+- Explicit gate/planner/worker settings and `--model` remain supported. `--model` overrides the worker default; a reviewed per-task `model` is resolved and checked against Pi authentication before launch.
+- The planner is shown the configured worker model, not a list of unrelated authenticated providers. Missing authentication or unknown explicit models fail without a provider fallback.
+- Example backend: configure DeepSeek in Pi, select `deepseek/deepseek-v4-flash`, then run `/capstan "task"`. See [DeepSeek's model reference](https://api-docs.deepseek.com/) for current model names.
+- Planning happens before approval and may incur provider usage. Costs shown by Pi/Capstan are catalog estimates; keep Pi's model prices current for budget accounting.
+
 ## Verification lanes (`run.verify`)
 
 | Value | Meaning |
@@ -31,7 +41,7 @@ Worker verification **first** uses `subtask.acceptance.commands` from the confir
 
 ## Budgets and resume
 
-- Planner spend counts toward the run total.
+- Planner spend counts toward the run total, including when a plan is declined.
 - Budget overrun interrupts the current model turn, then asks extend +25% or stop.
 - `/capstan pause` / `/capstan resume [runId]` persist atomically. Resume is idempotent.
 - `/capstan analyze` suggests config; it does not write `capstan.json`.
@@ -86,9 +96,9 @@ Controls task decomposition and plan generation.
     "maxSubtasks": 6,           // Max parallel subtasks (2-12)
     "repoMapTokens": 4500,      // Tokens for repository context (500-50000)
     "schemaRetries": 2,         // JSON schema validation retries (0-5)
-    "timeoutSec": 120,          // Planning timeout (10-900)
+    "timeoutSec": 120,          // Per-call wall-clock deadline, including retries (10-900)
     "budgetUsd": 1,             // Max planning cost ($)
-    "tokenLimit": 160000        // Max planning tokens
+    "tokenLimit": 160000        // Per-response output cap, including reasoning; capped by model limit
   }
 }
 ```
@@ -460,4 +470,3 @@ When a user asks you to customize capstan behavior:
 ```
 
 然后解释：这个配置支持最多 10 个并行子任务，每个任务运行 2 个候选方案取最优，总预算 $60，并在 worker 和最终阶段都运行测试验证。
-

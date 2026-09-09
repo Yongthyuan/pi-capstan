@@ -18,6 +18,8 @@ import { validatePlan } from "./plan-validation.ts";
 import { validateConfig, formatValidationResult, autoFixConfig } from "./config-validator.ts";
 import { RunAnalyzer } from "./analyzer.ts";
 import { generateConfigFromAnswers, describeConfig, writeConfigWithComments, type WizardAnswers } from "./config-wizard.ts";
+import { buildProofCarryingPrBody } from "./reporter.ts";
+import { resolvePiModelSpec } from "./model-policy.ts";
 
 export class CapstanService {
   readonly pi: ExtensionAPI;
@@ -63,12 +65,13 @@ export class CapstanService {
     const repoRoot = detectedRepoRoot ?? ctx.cwd;
     const config = await loadConfig(this.agentDir, repoRoot, this.configDirName);
     await pruneRunArtifacts(join(repoRoot, this.configDirName, "capstan", "runs"), config.retention);
-    const currentModel = (ctx as any).model as { provider?: string; id?: string } | undefined;
-    if (!config.worker.model && currentModel?.provider && currentModel.id) config.worker.model = `${currentModel.provider}/${currentModel.id}`;
     if (options.max) config.worker.maxConcurrency = Math.max(1, Math.min(8, Math.trunc(options.max)));
     if (options.budget) config.run.budgetUsd = options.budget;
     if (options.bestOf) config.worker.bestOfN = Math.max(1, Math.min(8, Math.trunc(options.bestOf)));
-    if (options.model) config.worker.model = options.model;
+    // Pin workers to the selected Pi session so child processes cannot pick a
+    // different global default. Explicit config/CLI models still take precedence.
+    const currentModel = ctx.model;
+    config.worker.model = options.model ?? config.worker.model ?? (currentModel ? `${currentModel.provider}/${currentModel.id}` : null);
     this.activeConfig = config;
     const runId = makeRunId();
     const runsRoot = join(repoRoot, this.configDirName, "capstan", "runs");
@@ -224,6 +227,7 @@ export class CapstanService {
       repoLock,
       hooks: {
         projectTrusted: ctx.isProjectTrusted(),
+        resolveWorkerModel: (spec) => resolvePiModelSpec(ctx as any, spec),
         onUpdate: (updated) => {
           this.activeRun = updated;
           ctx.ui.setWidget("capstan", widgetLines(updated));
@@ -373,14 +377,14 @@ export class CapstanService {
     const run = runId ? await store.load(runId) : this.activeRun;
     if (!run?.git || !run.merged.length) return void ctx.ui.notify("没有可发布的 last-green capstan branch", "warning");
     const branch = run.git.integrationBranch;
-    if (!(await ctx.ui.confirm("创建 GitHub Pull Request", `将 ${branch} 推送到 origin，并创建不包含本地日志/报告正文的 PR？`))) return;
+    if (!(await ctx.ui.confirm("创建 GitHub Pull Request", `将 ${branch} 推送到 origin，并附上已脱敏的任务目标、验证命令和晋升证据？`))) return;
     const lock = await RepoLock.forRepo(repoRoot, `pr-${run.runId}`);
     await lock.acquire();
     try {
       const pushed = await runCommand("git", ["push", "--set-upstream", "origin", branch], { cwd: repoRoot, timeoutMs: 120_000 });
       if (pushed.exitCode !== 0) throw new Error(`git push 失败: ${pushed.stderr || pushed.stdout}`);
-      const title = `capstan: verified run ${run.runId}`;
-      const body = `Pi Capstan run ${run.runId}.\n\nMerged verified subtasks: ${run.merged.join(", ")}.\nResult: ${run.partialSuccess ? "partial; failed dependencies excluded" : "complete"}.\n\nLocal RPC logs, sessions, and reports were not uploaded by this command.`;
+      const title = `capstan: run ${run.runId}`;
+      const body = buildProofCarryingPrBody(run);
       const created = await runCommand("gh", ["pr", "create", "--head", branch, "--title", title, "--body", body], { cwd: repoRoot, timeoutMs: 120_000 });
       if (created.exitCode !== 0) throw new Error(`gh pr create 失败: ${created.stderr || created.stdout}`);
       run.prUrl = created.stdout.trim().split("\n").find((line) => /^https:\/\//.test(line));

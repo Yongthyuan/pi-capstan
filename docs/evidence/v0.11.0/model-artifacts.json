@@ -1,0 +1,29 @@
+{
+  "artifactPolicy": "The four model-run JSON files are unmodified copies of locally captured artifacts. No raw RPC conversations are included. Source archives are attached to the GitHub release.",
+  "files": {
+    "native-e2e.json": {
+      "sha256": "8218b7cf65c3cc3fe45ba467dc4924f5083dda3f3bbce5c4f5c1d1437a96e4ff"
+    },
+    "planner-smoke.json": {
+      "sha256": "6f308ff06d6514d238589c1b56348dba763ac228941d322a49a4c3cc00655f27"
+    },
+    "oauth-targeted.json": {
+      "sha256": "137046284e3bb900cab712ddaccd608d484d2f50da90703e421b7cc8fadc9ad1"
+    },
+    "gate-check.json": {
+      "sha256": "df38a56f3a4ecd11e24e37d6d7f325f97e16dcef2efbe0641b85650d2201bba1"
+    }
+  },
+  "sourceArchives": [
+    {
+      "file": "source-f8f81be4bc04.tar.gz",
+      "contentSha256": "f8f81be4bc04fabf90616dd0db4f2a6c40dba5be0870ccd5014d72fe0833e4ba",
+      "archiveSha256": "64192fb53941796cabc3ceb474ebeef235b6fa9a15449166e3428cf9bcbea362"
+    },
+    {
+      "file": "source-c52e00b60d0f.tar.gz",
+      "contentSha256": "c52e00b60d0fdefe1d3ac54dcd3cb8493080628afdf0950dfc960ae26d1789c9",
+      "archiveSha256": "89bc6a73d3e8737c7c6161c268041193aa309d9208a7019e8af35b1df145c531"
+    }
+  ]
+}

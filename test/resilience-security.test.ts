@@ -89,7 +89,7 @@ test("planner repairs malformed JSON responses", async () => {
     risks: [],
   };
   const llm: any = {
-    availableModels: () => [],
+    workerModels: () => [],
     plan: async () => { throw new JsonResponseError("Unexpected end", "{bad"); },
     repairPlan: async (raw: string) => { repaired++; assert.equal(raw, "{bad"); return plan; },
   };

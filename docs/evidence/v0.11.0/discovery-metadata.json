@@ -1,0 +1,125 @@
+{
+  "baseline": {
+    "version": "0.10.0",
+    "npm": {
+      "description": "Controlled multi-agent coding pipeline for pi-coding-agent: plan-gated parallel subagents, Git-worktree isolation, DAG scheduling with path ownership, budgets, verification, merge, recovery.",
+      "keywords": [
+        "pi",
+        "pi-coding-agent",
+        "multi-agent",
+        "capstan",
+        "swarm",
+        "subagents",
+        "ai-agents",
+        "llm",
+        "orchestration",
+        "git-worktree",
+        "coding-agent"
+      ],
+      "pi": {
+        "extensions": [
+          "./index.ts"
+        ]
+      }
+    },
+    "github": {
+      "description": "Controlled multi-agent swarm pipeline for pi-coding-agent \u2014 plan-gated parallel subagents, Git-worktree isolation, DAG scheduling with path ownership, budgets, human-in-the-loop merges",
+      "homepageUrl": "",
+      "name": "pi-capstan",
+      "repositoryTopics": [
+        {
+          "name": "agents"
+        },
+        {
+          "name": "ai-agents"
+        },
+        {
+          "name": "coding-agent"
+        },
+        {
+          "name": "git-worktree"
+        },
+        {
+          "name": "llm"
+        },
+        {
+          "name": "multi-agent"
+        },
+        {
+          "name": "orchestration"
+        },
+        {
+          "name": "pi-coding-agent"
+        },
+        {
+          "name": "subagents"
+        },
+        {
+          "name": "swarm"
+        }
+      ],
+      "url": "https://github.com/Yongthyuan/pi-capstan"
+    }
+  },
+  "release": {
+    "version": "0.11.0",
+    "npm": {
+      "description": "Multi-agent coding orchestration for Pi: parallel Git worktrees, human-approved plans, controlled merges, recovery, and verification evidence in pull requests.",
+      "keywords": [
+        "pi-package",
+        "pi-coding-agent",
+        "pi-extension",
+        "multi-agent",
+        "coding-agent",
+        "ai-agents",
+        "agent-orchestration",
+        "parallel-agents",
+        "git-worktree",
+        "human-in-the-loop",
+        "agentic-workflows",
+        "verification",
+        "pull-request",
+        "developer-tools",
+        "typescript",
+        "llm",
+        "deepseek",
+        "subagents",
+        "swarm",
+        "capstan"
+      ],
+      "pi": {
+        "extensions": [
+          "./index.ts"
+        ],
+        "image": "https://raw.githubusercontent.com/Yongthyuan/pi-capstan/v0.11.0/docs/assets/capstan-overview.png"
+      }
+    },
+    "github": {
+      "description": "Multi-agent coding orchestration for Pi: parallel Git worktrees, human-approved plans, controlled merges, recovery, and verification evidence in pull requests.",
+      "homepage": "https://www.npmjs.com/package/pi-capstan",
+      "topics": [
+        "agent-orchestration",
+        "agentic-workflows",
+        "agents",
+        "ai-agents",
+        "coding-agent",
+        "developer-tools",
+        "git-worktree",
+        "human-in-the-loop",
+        "llm",
+        "multi-agent",
+        "orchestration",
+        "parallel-agents",
+        "pi-coding-agent",
+        "pi-extension",
+        "pi-package",
+        "pull-request",
+        "subagents",
+        "swarm",
+        "typescript",
+        "verification"
+      ]
+    }
+  },
+  "measurement": "Describes metadata and presentation changes. No search-volume or ranking uplift was measured."
+}

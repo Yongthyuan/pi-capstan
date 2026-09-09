@@ -5,6 +5,10 @@ node_modules/
 coverage/
 dist/
 
+# Bench fixtures are regenerated; keep results out of git by default.
+scripts/bench/fixtures/
+scripts/bench/results/
+
 # Local design notes are intentionally excluded from the published repository.
 pi-swarm-构建计划.md
 .claude/

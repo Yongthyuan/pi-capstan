@@ -79,7 +79,8 @@ test("orchestrator completes two-worker branch-only vertical slice", async () =>
     assert.equal(run.phase, "done", run.error);
     assert.equal(run.outcome, "branch");
     assert.deepEqual(run.merged, ["a", "b"]);
-    assert.equal(report.includes("Capstan 完成"), true);
+    assert.equal(report.includes("交付报告"), true);
+    assert.equal(report.includes("完成"), true);
   } finally {
     await cleanupTempRoot(root);
   }
@@ -356,6 +357,41 @@ test("trusted setup runs before worker and integration verification without spen
   }
 });
 
+test("integration fixer rejects out-of-scope writes before committing", async () => {
+  const root = await mkdtemp(join(tmpdir(), "capstan-fixer-scope-"));
+  try {
+    const fixture = await makeOrchestratorFixture(root, "fixer-scope", 10, async () => "stop", { FAKE_PI_FIXER_OUTSIDE: "1" });
+    fixture.config.run.verify.integrationLight = ['node -e "process.exit(1)"'];
+    await fixture.orchestrator.execute(false);
+    assert.equal(fixture.run.phase, "failed");
+    assert.match(fixture.run.workers.a.currentAction, /scope violation: README.md/);
+    const readme = await runCommand("git", ["show", fixture.run.git.integrationBranch + ":README.md"], { cwd: fixture.repo });
+    assert.equal(readme.stdout, "base\n");
+  } finally {
+    await cleanupTempRoot(root);
+  }
+});
+
+test("worker launch resolves plan overrides before creating a child process", async () => {
+  const root = await mkdtemp(join(tmpdir(), "capstan-worker-model-"));
+  try {
+    const fixture = await makeOrchestratorFixture(root, "worker-model", 10);
+    fixture.run.plan.subtasks[0].model = "missing/model";
+    fixture.config.worker.model = "deepseek/deepseek-v4-flash";
+    fixture.orchestrator.hooks.resolveWorkerModel = (spec) => {
+      if (spec === "missing/model") throw new Error("No authenticated Pi model for missing/model");
+      return spec!;
+    };
+    await fixture.orchestrator.execute(false);
+    assert.equal(fixture.run.workers.a.status, "failed");
+    assert.match(fixture.run.workers.a.currentAction, /No authenticated Pi model/);
+    assert.deepEqual(fixture.run.merged, ["b"]);
+    assert.equal(fixture.run.workers.b.launch.model, "deepseek/deepseek-v4-flash");
+  } finally {
+    await cleanupTempRoot(root);
+  }
+});
+
 async function writeFakePi(root: string): Promise<string> {
   const path = join(root, "fake-pi.mjs");
   await writeFile(path, `import readline from "node:readline";
@@ -401,6 +437,7 @@ function scheduleFinish() {
   release();
 }
 function finish() {
+  if (workerId.startsWith("integration-fixer-") && process.env.FAKE_PI_FIXER_OUTSIDE === "1") writeFileSync("README.md", "outside scope");
   if (thinkingTimer) clearInterval(thinkingTimer), (thinkingTimer = undefined);
   if (uiBarrierTimer) clearInterval(uiBarrierTimer), (uiBarrierTimer = undefined);
   if (workerBarrierTimer) clearInterval(workerBarrierTimer), (workerBarrierTimer = undefined);

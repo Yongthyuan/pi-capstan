@@ -14,9 +14,11 @@ import { processIdentityStatus, stopOwnedProcess } from "./process-identity.ts";
 import { MetricsCollector } from "./metrics.ts";
 import { loadConfiguredPlugins } from "./plugin-loader.ts";
 import type { DefaultPluginRegistry } from "./plugins/registry.ts";
+import { createSerialQueue, type SerialQueue } from "./serial-queue.ts";
 
 export interface OrchestratorHooks {
   projectTrusted: boolean;
+  resolveWorkerModel?(spec: string | null): string;
   onUpdate(run: CapstanRun): void;
   onUi(workerId: string, request: PendingUiRequest & Record<string, unknown>): Promise<Record<string, unknown>>;
   onUiBatch?(requests: Array<{ workerId: string; request: PendingUiRequest & Record<string, unknown> }>): Promise<Record<string, Record<string, unknown>>>;
@@ -69,17 +71,16 @@ export class Orchestrator {
   private stallTimer?: ReturnType<typeof setInterval>;
   private mailboxTimer?: ReturnType<typeof setInterval>;
   private persistTimer?: ReturnType<typeof setTimeout>;
-  private persistChain: Promise<void> = Promise.resolve();
-  private mergeChain: Promise<void> = Promise.resolve();
-  private interactionChain: Promise<void> = Promise.resolve();
-  private setupChain: Promise<void> = Promise.resolve();
+  private persistQueue: SerialQueue = createSerialQueue();
+  private mergeQueue: SerialQueue = createSerialQueue();
+  private interactionQueue: SerialQueue = createSerialQueue();
+  private setupQueue: SerialQueue = createSerialQueue();
   private uiBatch: QueuedUiRequest[] = [];
   private uiBatchTimer?: ReturnType<typeof setTimeout>;
   private abortRequested = false;
   private pauseRequested = false;
   private interruptRequested = false;
   private startedAt = Date.now();
-  private finalVerification?: VerificationResult;
   private landingNote?: string;
   readonly metrics: MetricsCollector;
   private plugins?: DefaultPluginRegistry;
@@ -118,6 +119,7 @@ export class Orchestrator {
     this.run.error = undefined;
     this.run.outcome = undefined;
     this.run.partialSuccess = false;
+    this.run.finalVerification = undefined;
     this.startedAt = this.run.createdAt;
     try {
       this.plugins = await loadConfiguredPlugins(this.config, { repoRoot: this.run.cwd, runDir: this.run.runDir, runId: this.run.runId });
@@ -184,7 +186,7 @@ export class Orchestrator {
         await this.persist();
         if (["done", "failed", "aborted"].includes(this.run.phase)) {
           await this.hooks.onBeforeReport?.(this.run);
-          const report = buildReport(this.run, this.finalVerification, this.landingNote);
+          const report = buildReport(this.run, this.run.finalVerification, this.landingNote);
           const reportPath = join(this.run.runDir, "report.md");
           await writeFile(reportPath, report, { mode: 0o600 });
           this.run.reportPath = reportPath;
@@ -321,7 +323,7 @@ export class Orchestrator {
       }
       await this.ensureCandidate("wave", `ready:${runnable.map((task) => task.id).join(",")}:${this.run.merged.length}:r${this.run.planRevision ?? 1}`);
       await this.runTaskPool(runnable);
-      await this.mergeChain;
+      await this.mergeQueue.drain();
       const failed = runnable.filter((task) => this.run.workers[task.id]?.status === "failed");
       if (failed.length && this.config.run.failurePolicy === "fail-fast") throw new Error(`worker 失败: ${failed.map((task) => task.id).join(", ")}`);
       const candidate = this.activeOperation();
@@ -389,11 +391,12 @@ export class Orchestrator {
         peers: [...(this.run.plan?.subtasks.map((peer) => peer.id).filter((id) => id !== task.id) ?? []), "lead"],
       });
       const safetyGuardPath = await this.resolveSafetyGuard();
+      const model = this.resolveWorkerModel(task.model ?? this.config.worker.model);
       runtime.launch = {
         guardPath,
         promptPath,
         sessionDir: join(this.run.runDir, "sessions", task.id),
-        model: task.model ?? this.config.worker.model,
+        model,
         tools: [...this.config.worker.tools],
         projectTrusted: this.hooks.projectTrusted,
         safetyGuardPath,
@@ -407,7 +410,7 @@ export class Orchestrator {
         promptPath,
         sessionDir: join(this.run.runDir, "sessions", task.id),
         sessionFile: runtime.sessionFile,
-        model: task.model ?? this.config.worker.model,
+        model,
         tools: this.config.worker.tools,
         projectTrusted: this.hooks.projectTrusted,
         safetyGuardPath,
@@ -635,9 +638,7 @@ export class Orchestrator {
   }
 
   private enqueueMerge(item: PreparedWorker): Promise<void> {
-    const next = this.mergeChain.then(() => this.mergePrepared(item), () => this.mergePrepared(item));
-    this.mergeChain = next.catch(() => undefined);
-    return next;
+    return this.mergeQueue.enqueue(() => this.mergePrepared(item));
   }
 
   private markBlocked(task: Subtask, blockedBy: string[]): void {
@@ -784,7 +785,7 @@ export class Orchestrator {
     });
     if (!commands.length) {
       const result = skippedVerification();
-      if (full) this.finalVerification = result;
+      if (full) this.run.finalVerification = result;
       if (operation) {
         operation.verification = result;
         operation.phase = "verified";
@@ -804,7 +805,7 @@ export class Orchestrator {
       await this.runIntegrationFixer(commands, result);
       result = await this.verifyControlled(full ? "integration-full" : "integration-light", commands, target);
     }
-    if (full) this.finalVerification = result;
+    if (full) this.run.finalVerification = result;
     if (!result.ok) throw new Error(`集成验证失败: ${truncateTail(JSON.stringify(result), 4_000)}`);
     if (operation) {
       operation.verification = result;
@@ -836,19 +837,23 @@ export class Orchestrator {
   private runExclusiveSetup<T>(action: () => Promise<T>): Promise<T> {
     // Shared dependency dirs are symlinks onto one physical directory, so
     // concurrent setup commands (npm ci and friends) would trample each other.
-    const result = this.setupChain.then(action, action);
-    this.setupChain = result.then(() => undefined, () => undefined);
-    return result;
+    return this.setupQueue.enqueue(action);
   }
 
   private async runIntegrationFixer(commands: string[], failure: VerificationResult): Promise<void> {
+    const operation = this.activeOperation();
+    if (!operation) throw new Error("integration fixer 缺少 candidate operation");
+    const involvedIds = new Set([...this.run.merged, ...operation.subtaskIds]);
+    const involved = this.run.plan!.subtasks.filter((task) => involvedIds.has(task.id));
+    const ownedPaths = [...new Set(involved.flatMap((task) => [...task.ownedPaths, ...(task.sharedPaths ?? []), ...(task.generatedPaths ?? [])]))];
+    if (!ownedPaths.length) throw new Error("integration fixer 缺少已授权的任务作用域");
     const task: Subtask = {
       id: `integration-fixer-${Date.now().toString(36)}`,
       title: "integration verification fixer",
       goal: "Fix integration verification failures with the smallest evidence-grounded change.",
       role: "integration-fixer",
       rolePrompt: "You are the integration fixer. Work in the integration tree, make only necessary changes, and do not commit.",
-      ownedPaths: ["**"],
+      ownedPaths,
       readPaths: ["**"],
       dependsOn: [],
       contracts: [],
@@ -856,12 +861,17 @@ export class Orchestrator {
       model: this.config.worker.model ?? undefined,
     };
     const handle = await this.createIntegrationWorker(task, task.model);
-    const operation = this.activeOperation();
-    if (!operation) throw new Error("integration fixer 缺少 candidate operation");
     const runtime = this.syntheticRuntime(task, operation.candidateWorktree, operation.candidateBranch);
     try {
       await this.runControlledPrompt(handle, runtime, verificationFailurePrompt(failure, 1, 1), "fixing");
-      await this.workspace.commitIntegration("capstan: fix integration verification", this.activeOperation());
+      // Check the real diff even if a tool bypassed the write/edit guard.
+      const committed = await this.workspace.commitTask(task, operation.candidateWorktree, {
+        allowlist: this.config.worker.scopeAllowlist,
+        violationPolicy: "fail",
+      });
+      operation.candidateSha = committed.commit;
+      operation.updatedAt = Date.now();
+      await this.persist();
     } finally {
       await handle.stop().catch(() => undefined);
       this.handles.delete(task.id);
@@ -876,9 +886,13 @@ export class Orchestrator {
     const promptPath = join(promptDir, `${task.id}.md`);
     await writeFile(promptPath, task.rolePrompt, { mode: 0o600 });
     const guardPath = await writeGuardExtension({ runDir: this.run.runDir, worktree: targetWorktree, heartbeatFile: join(this.run.runDir, "heartbeat"), task, trusted: this.hooks.projectTrusted, config: this.config, peers: [] });
-    const handle = this.workerFactory({ id: task.id, title: task.title, worktree: targetWorktree, runDir: this.run.runDir, guardPath, promptPath, sessionDir: join(this.run.runDir, "sessions", task.id), model: model ?? this.config.worker.model, tools: this.config.worker.tools, projectTrusted: this.hooks.projectTrusted, safetyGuardPath: await this.resolveSafetyGuard() });
+    const handle = this.workerFactory({ id: task.id, title: task.title, worktree: targetWorktree, runDir: this.run.runDir, guardPath, promptPath, sessionDir: join(this.run.runDir, "sessions", task.id), model: this.resolveWorkerModel(model ?? this.config.worker.model), tools: this.config.worker.tools, projectTrusted: this.hooks.projectTrusted, safetyGuardPath: await this.resolveSafetyGuard() });
     this.handles.set(task.id, handle);
     return handle;
+  }
+
+  private resolveWorkerModel(spec: string | null): string | null {
+    return this.hooks.resolveWorkerModel ? this.hooks.resolveWorkerModel(spec) : spec;
   }
 
   private syntheticRuntime(task: Subtask, worktree: string, branch: string): WorkerRuntime {
@@ -1072,9 +1086,7 @@ export class Orchestrator {
   }
 
   private enqueueInteraction(task: () => Promise<void>): Promise<void> {
-    const result = this.interactionChain.then(task, task);
-    this.interactionChain = result.catch(() => undefined);
-    return result;
+    return this.interactionQueue.enqueue(task);
   }
 
   private isOverBudget(runtime: WorkerRuntime): boolean {
@@ -1241,13 +1253,11 @@ export class Orchestrator {
       this.persistTimer = undefined;
       await this.persist();
     }
-    await this.persistChain;
+    await this.persistQueue.drain();
   }
 
   private persist(): Promise<void> {
-    const operation = this.persistChain.then(() => this.persistNow(), () => this.persistNow());
-    this.persistChain = operation.catch(() => undefined);
-    return operation;
+    return this.persistQueue.enqueue(() => this.persistNow());
   }
 
   private async persistNow(): Promise<void> {

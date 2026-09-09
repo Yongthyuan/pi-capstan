@@ -1,0 +1,35 @@
+/** Public synthetic fixture. No user repository files or history are copied. */
+export const nativeScenario = {
+  task: "Implement two independent modules from the existing tests. Task slug owns only src/slug.mjs and exports slugify(text): lowercase ASCII letters/digits, collapse other characters to hyphens, trim leading/trailing hyphens. Its acceptance command is node --test test/slug.test.mjs. Task unique owns only src/unique.mjs and exports uniqueBy(items, keyFn): keep the first item for each key in input order without mutating the array. Its acceptance command is node --test test/unique.test.mjs. Both tasks read their corresponding tests. Do not change tests, package.json or README. Return exactly two independent subtasks. The integrated result must pass npm test.",
+  files: {
+    "README.md": "# Synthetic Capstan delivery test\n\nImplement slugify and uniqueBy against the provided tests.\n",
+    "package.json": JSON.stringify({ name: "capstan-synthetic-e2e", private: true, type: "module", scripts: { test: "node --test test/*.test.mjs" } }, null, 2) + "\n",
+    "test/slug.test.mjs": [
+      'import test from "node:test";',
+      'import assert from "node:assert/strict";',
+      'import { slugify } from "../src/slug.mjs";',
+      'test("slug normalizes punctuation, casing and boundaries", () => {',
+      '  assert.equal(slugify("  Hello, WORLD!  "), "hello-world");',
+      '  assert.equal(slugify("A___B---C 123"), "a-b-c-123");',
+      '  assert.equal(slugify("---"), "");',
+      '  assert.equal(slugify(""), "");',
+      '});',
+      '',
+    ].join("\n"),
+    "test/unique.test.mjs": [
+      'import test from "node:test";',
+      'import assert from "node:assert/strict";',
+      'import { uniqueBy } from "../src/unique.mjs";',
+      'test("unique keeps first values and leaves input unchanged", () => {',
+      '  const values = [{id: 1, label: "first"}, {id: 2}, {id: 1, label: "last"}];',
+      '  const snapshot = structuredClone(values);',
+      '  assert.deepEqual(uniqueBy(values, item => item.id), [values[0], values[1]]);',
+      '  assert.deepEqual(values, snapshot);',
+      '  assert.deepEqual(uniqueBy([], item => item.id), []);',
+      '  assert.deepEqual(uniqueBy(["a", "A", "b"], item => item.toLowerCase()), ["a", "b"]);',
+      '});',
+      '',
+    ].join("\n"),
+  },
+  expectedSources: ["src/slug.mjs", "src/unique.mjs"],
+};

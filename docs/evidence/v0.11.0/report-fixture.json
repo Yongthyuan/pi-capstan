@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "runId": "report_fixture",
+  "createdAt": 1,
+  "updatedAt": 2,
+  "cwd": "/fixture/repo",
+  "runDir": "/fixture/run",
+  "task": "Two independent modules",
+  "phase": "done",
+  "outcome": "branch",
+  "planEdits": [],
+  "partialSuccess": false,
+  "plan": {
+    "schemaVersion": 1,
+    "taskSummary": "Two independent modules",
+    "strategy": "split",
+    "contracts": [],
+    "subtasks": [
+      {
+        "id": "alpha",
+        "title": "alpha",
+        "goal": "Implement alpha",
+        "role": "coder",
+        "rolePrompt": "Implement the assigned file.",
+        "ownedPaths": [
+          "src/alpha.mjs"
+        ],
+        "readPaths": [],
+        "dependsOn": [],
+        "contracts": [],
+        "acceptance": {
+          "commands": [],
+          "criteria": []
+        }
+      },
+      {
+        "id": "beta",
+        "title": "beta",
+        "goal": "Implement beta",
+        "role": "coder",
+        "rolePrompt": "Implement the assigned file.",
+        "ownedPaths": [
+          "src/beta.mjs"
+        ],
+        "readPaths": [],
+        "dependsOn": [],
+        "contracts": [],
+        "acceptance": {
+          "commands": [],
+          "criteria": []
+        }
+      }
+    ],
+    "mergeOrder": [
+      "alpha",
+      "beta"
+    ],
+    "risks": []
+  },
+  "workers": {
+    "alpha": {
+      "subtaskId": "alpha",
+      "status": "done",
+      "worktree": "/fixture/alpha",
+      "branch": "task/alpha",
+      "currentAction": "done",
+      "retries": 0,
+      "turns": 1,
+      "pendingUi": [],
+      "lastEventAt": 2,
+      "scopeViolations": [],
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": 0
+      },
+      "verification": {
+        "ok": true,
+        "skipped": true,
+        "commands": []
+      }
+    },
+    "beta": {
+      "subtaskId": "beta",
+      "status": "done",
+      "worktree": "/fixture/beta",
+      "branch": "task/beta",
+      "currentAction": "done",
+      "retries": 0,
+      "turns": 1,
+      "pendingUi": [],
+      "lastEventAt": 2,
+      "scopeViolations": [],
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "cost": 0
+      },
+      "verification": {
+        "ok": true,
+        "skipped": true,
+        "commands": []
+      }
+    }
+  },
+  "merged": [
+    "alpha",
+    "beta"
+  ],
+  "conflicts": [],
+  "totals": {
+    "input": 0,
+    "output": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "cost": 0,
+    "wallSec": 1,
+    "turns": 2
+  },
+  "finalVerification": {
+    "ok": true,
+    "skipped": true,
+    "commands": []
+  },
+  "gitOperations": [
+    {
+      "operationId": "fixture_wave",
+      "kind": "wave",
+      "phase": "promoted",
+      "preMergeSha": "1111111111111111111111111111111111111111",
+      "candidateSha": "2222222222222222222222222222222222222222",
+      "postMergeSha": "3333333333333333333333333333333333333333",
+      "candidateBranch": "candidate/fixture",
+      "candidateWorktree": "/fixture/candidate",
+      "subtaskIds": [
+        "alpha",
+        "beta"
+      ],
+      "verification": {
+        "ok": true,
+        "skipped": true,
+        "commands": []
+      },
+      "startedAt": 1,
+      "updatedAt": 2
+    }
+  ],
+  "git": {
+    "repoRoot": "/fixture/repo",
+    "baseCommit": "1111111111111111111111111111111111111111",
+    "originBranch": "main",
+    "integrationBranch": "integration/fixture",
+    "integrationWorktree": "/fixture/integration",
+    "dirtyBase": false,
+    "initialHead": "1111111111111111111111111111111111111111",
+    "initialStatusHash": "fixture"
+  }
+}

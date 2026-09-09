@@ -1,0 +1,5 @@
+
+> pi-capstan@0.11.0 test:native
+> node scripts/native-smoke.mjs
+
+native pi auto-discovery and guarded worker RPC startup ok

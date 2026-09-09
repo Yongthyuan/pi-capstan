@@ -1,113 +1,106 @@
-# Capstan
+# Capstan · Multi-agent coding for Pi
 
-> **Many hands. One winch. Total control.**
+**Parallel worktrees. Reviewable delivery.**
 
+[![npm](https://img.shields.io/npm/v/pi-capstan?color=38bdf8)](https://www.npmjs.com/package/pi-capstan)
 [![CI](https://github.com/Yongthyuan/pi-capstan/actions/workflows/ci.yml/badge.svg)](https://github.com/Yongthyuan/pi-capstan/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-58A6FF.svg)](./LICENSE)
-[![Node](https://img.shields.io/badge/node-%E2%89%A522.19-3FB950.svg)](./package.json)
-[![Pi](https://img.shields.io/badge/Pi-%E2%89%A50.84.1-8957E5.svg)](https://github.com/badlogic/pi-mono)
+[![MIT](https://img.shields.io/badge/license-MIT-34d399)](./LICENSE)
+[![Pi package](https://img.shields.io/badge/Pi-extension-a78bfa)](https://pi.dev/packages)
 
-**Capstan runs several AI coding agents on your repository at the same time — without letting go of the wheel.** Plans are reviewed before money is spent, every worker is isolated in its own Git worktree, costs are hard-capped, and only verified results get merged. It is a [Pi](https://github.com/badlogic/pi-mono) extension, formerly named *pi-agent-swarm*.
+[中文](./README.zh-CN.md) · [Quick start](#quick-start) · [Before / after](#what-changed-in-v0110) · [Evidence](./docs/evidence/v0.11.0/README.md) · [Configuration](./docs/CONFIGURATION.md)
 
-<!-- Drop a demo recording at docs/assets/demo.gif, then uncomment:
-<p align="center"><img src="docs/assets/demo.gif" alt="Capstan: plan → approve → parallel workers → verified merge" width="720"></p>
--->
+Capstan is a [Pi coding agent](https://github.com/earendil-works/pi) extension for **multi-agent coding orchestration**. Review a plan, run parallel subagents in separate Git worktrees, and inspect what landed with its test results and commit history. Your current Pi model and authentication carry through to the workers.
 
-## The problem
-
-One coding agent is slow. Five coding agents are chaos: they edit the same files, run your test suite over each other, spend tokens nobody counted, and land half-reviewed changes straight onto your branch.
-
-Capstan's answer is a pipeline, not a free-for-all:
-
-```text
-/capstan "add OAuth login, write tests, update the README"
-   │
-   ├─ 1. GATE      trivial request? it runs solo — no capstan, no extra cost
-   ├─ 2. PLAN      a planner reads your repo and proposes a task DAG
-   ├─ 3. CONFIRM   you review the plan (tasks, order, acceptance checks) — nothing spent yet
-   ├─ 4. BUILD     up to 8 workers, each in its own Git worktree, owning its own files
-   ├─ 5. VERIFY    worker output and the merged tree must pass allowlisted checks
-   └─ 6. LAND      last-green results merge to an integration branch; PR when you say so
-```
+![Capstan workflow: approve a plan, run isolated workers, inspect candidate checks, and review integration evidence](./docs/assets/capstan-overview.png)
 
 ## Quick start
+
+Requires **Node.js ≥22.19**, **Pi ≥0.84.1**, and a Git repository.
 
 ```bash
 pi install npm:pi-capstan
 ```
 
-Restart Pi, then just talk to it:
+Restart Pi. Select an authenticated model with `/login` and `/model`, then run:
 
 ```text
-/capstan "implement the OAuth backend, the login page, tests, and docs"
+/capstan "add CSV export, implement the download button, and document the new endpoint"
 ```
 
-You will see the plan first. Approve it and watch the workers fan out on the dashboard; decline it and nothing was spent. **Zero configuration required** — safe defaults ship enabled. When you want to tune concurrency, budgets, or verification, run `/capstan config`; most people never do.
+Review the task plan before approving worker execution. Planning may already use provider tokens. Watch progress with `/capstan board`; inspect the finished integration branch and report before creating a PR with `/capstan pr`.
 
-## What you get
+Capstan uses Pi's existing provider credentials. Explicit model overrides must resolve to an authenticated model; configuration errors stop the run. [Model and budget settings →](./docs/CONFIGURATION.md)
 
-- **Nothing runs without your yes.** Every capstan produces a reviewable plan and waits. Declining costs nothing.
-- **Workers never collide.** Each task works in its own Git worktree with declared file ownership. Out-of-scope edits are reverted precisely — the rest of the work survives.
-- **Costs are capped, twice.** Per-worker and whole-run dollar and token budgets stop runaway turns instead of surprising your invoice.
-- **Green means green.** Results pass two verification levels (per-task and integrated) using allowlisted commands before anything lands.
-- **Failure stays local.** A broken task doesn't sink independent ones; a crashed session resumes where it left off; orphaned workers get reclaimed.
-- **Small tasks stay cheap.** Complexity gating routes simple requests to solo mode instead of paying for a capstan. Disagree? `--force`.
+## Built for parallel changes you can review
 
-## Capstan vs. delegation tools
-
-Pi's ecosystem has great *delegation* extensions — a parent agent asking child agents to think, review, or research. Capstan is for the other job: **many agents editing your repository in parallel, safely.**
-
-| | Delegation-style subagents | Capstan |
+| Capability | What it gives you | Implementation / checks |
 |---|---|---|
-| Best at | thinking, reviewing, answering | building — parallel repo edits |
-| Isolation | shared workspace, varies | per-task Git worktrees, enforced |
-| Cost | usually uncounted | hard budgets, live accounting |
-| Landing | whatever the model did | verified, branch-first merge you control |
+| Human-approved plans | Inspect task dependencies and file ownership before workers start | [Plan validation](./src/plan-validation.ts) · [Lifecycle tests](./test/worker-orchestrator.test.ts) |
+| Isolated Git worktrees | Separate workspaces for concurrent workers, with declared edit scopes | [Workspace](./src/workspace.ts) · [Scope and security tests](./test/resilience-security.test.ts) |
+| Candidate merge and promotion | Inspect combined changes on a candidate before advancing the integration branch | [Orchestrator](./src/orchestrator.ts) · [Recovery tests](./test/recovery-hardening.test.ts) |
+| Verification evidence in PRs | Task checks, candidate SHAs, final checks, and explicit review requirements | [Example PR](./docs/evidence/v0.11.0/after-pr.md) · [Reporter tests](./test/reporter.test.ts) |
+| Usage budgets and recovery | Track token/cost estimates, limit further work, and recover interrupted runs | [Configuration](./docs/CONFIGURATION.md) · [State](./src/state.ts) |
+| Pi-native model selection | Reuse the selected provider and Pi authentication across planning and workers | [Model policy](./src/model-policy.ts) · [Model tests](./test/model-policy.test.ts) |
+
+Best suited to changes with separable files or modules and meaningful project checks. Worktrees separate Git state; they are not an OS security sandbox. Budget enforcement depends on reported usage, and dollar figures are estimates.
+
+## What changed in v0.11.0
+
+**Same input, different delivery verdict.** We replayed one fixed run through the published v0.10.0 reporter and the v0.11.0 reporter: two tasks landed, but task, candidate, and final verification were all skipped.
+
+![Before and after: v0.10.0 reports verified subtasks and complete; v0.11.0 says verification incomplete and records skipped checks](./docs/assets/verification-before-after.png)
+
+| Evidence | v0.10.0 | v0.11.0 |
+|---|---|---|
+| All checks skipped | PR says “Merged verified subtasks” and “Result: complete” | PR says “complete; verification incomplete” and requests review |
+| Final check absent | Complete result label follows run state | Missing evidence prevents a verified-success verdict |
+| Review detail | Merged task names | Task checks, candidate/promotion SHAs, and final integration checks |
+| Local test suite | 61 passing tests at the published tag | 80 passing tests for this release |
+
+This is a deterministic reporting comparison, **not a model-performance benchmark**. Test counts describe different suites, not a coverage percentage. [Inputs, raw outputs, controls, and reproduction →](./docs/evidence/v0.11.0/README.md)
+
+A recorded DeepSeek smoke run also took two small modules from failing tests through two real Pi workers to a passing integration branch: **17 worker turns, 21,532 tokens, estimated $0.0208**. It used the recorded development source snapshot; it is one synthetic run. A separate earlier planner smoke completed **4/10 cases**, and a later OAuth plan was rejected for unsafe command syntax. Complex planning remains a limitation. [Full validation record →](./docs/validation-2026-09-09.md)
 
 ## Commands
 
 ```text
-/capstan "task"                      start a capstan (add --force --max 4 --best-of 2 --plan-only as needed)
-/capstan board                       live dashboard
-/capstan pause | resume | abort      control the running capstan
-/capstan replan                      add work mid-run
-/capstan merge | clean | replay      land or clean up finished runs
-/capstan pr [runId]                  push the integration branch and open a PR
-/capstan cases                       browse/rate past runs (improves future planning)
-/capstan config | validate | status  configure, lint config, inspect state
+/capstan "task"                       propose a plan and start after approval
+/capstan "task" --plan-only           inspect a plan without starting workers
+/capstan board                       view worker progress
+/capstan pause | resume | abort       control a run
+/capstan replan                       propose additional work
+/capstan merge | clean | replay       manage finished runs
+/capstan pr [runId]                   push the integration branch and open a PR
+/capstan config | validate | status   configure and inspect
+/capstan cases                       browse and rate previous runs
 ```
 
-Programmatic delegation is a first-class citizen too: the main Pi model can call the `capstan_delegate` tool, and it goes through the same plan gate as everything else.
+The `capstan_delegate` tool exposes the same plan-approval flow to Pi. Options include `--force`, `--max 4`, and `--best-of 2`; see the [command guide](./docs/README.md).
 
-## Safety defaults (always on)
+## Documentation and development
 
-Branch-first landing (never auto-applies to your checkout) · plan confirmation gate · dollar + token budgets at worker and run level · scope-violation revert · two-level verification with a command prefix allowlist · worker extension isolation · credential redaction in logs and the case store · atomic state with recovery.
-
-Git worktrees isolate concurrent work — they don't contain malicious code. Trust your repo and these defaults have you covered; don't trust it? Run Capstan inside a container.
-
-## Documentation
-
-- **[docs/README.md](./docs/README.md)** — start here: quick reference and patterns
-- **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** — all 51 configuration keys (when you outgrow the defaults)
-- **[docs/DESIGN_PHILOSOPHY.md](./docs/DESIGN_PHILOSOPHY.md)** — why it's built this way
-- **[docs/EXTENSION_POINTS.md](./docs/EXTENSION_POINTS.md)** · **[docs/PLUGINS.md](./docs/PLUGINS.md)** — guards and plugins
-- **[docs/examples/](./docs/examples/)** — copy-paste configs and plugin examples
-
-## Development
+- [Delivery evidence](./docs/EVIDENCE.md) — how to read the report and Proof-Carrying PR (recorded checks, not formal proof)
+- [Configuration](./docs/CONFIGURATION.md) — models, concurrency, budgets, verification, and merge policy
+- [Design](./docs/DESIGN_PHILOSOPHY.md) · [Extensions](./docs/EXTENSION_POINTS.md) · [Plugins](./docs/PLUGINS.md)
+- [Examples](./docs/examples/README.md) · [Benchmark protocol](./scripts/bench/README.md) · [Changelog](./CHANGELOG.md)
 
 ```bash
+git clone https://github.com/Yongthyuan/pi-capstan.git
+cd pi-capstan
 npm ci
-npm run check        # types + syntax
-npm test             # unit suite
-npm run test:native  # real Pi RPC smoke
+npm run check
+npm test
+npm run test:native       # offline: Pi registration + guarded worker startup
+npm run evidence:compare  # offline: regenerate the before/after fixture
+pi -e ./index.ts          # load the checkout in Pi
 ```
 
-CI runs Linux + Windows on every push, with a daily cross-platform soak.
+Provider-backed validation is opt-in and incurs provider usage:
 
-## Why "Capstan"
+```bash
+PI_CAPSTAN_TEST_MODEL=deepseek/deepseek-v4-flash npm run test:native:e2e
+```
 
-A capstan turns one person's pull into tons of controlled force — and its pawl means the load never slips back. Many hands (parallel workers), one winch (the orchestrator), total control (gates, budgets, plan confirmation, reversible merges).
+CI checks Linux and Windows on pushes, with a scheduled soak workflow. The UI currently mixes English and Chinese. Contributions are welcome: include the task, version, model/provider, relevant checks, and a redacted reproduction in [an issue](https://github.com/Yongthyuan/pi-capstan/issues).
 
-## License
-
-[MIT](./LICENSE)
+Capstan is named after the winch used to coordinate many hands on one load. Formerly `pi-agent-swarm`. [MIT licensed](./LICENSE).

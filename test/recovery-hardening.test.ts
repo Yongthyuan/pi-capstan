@@ -91,12 +91,12 @@ test("planner model calls carry bounded provider options and account usage", asy
   config.planner.tokenLimit = 12_345;
   let seenOptions: any;
   let accounted = 0;
-  const model = { provider: "fake", id: "planner" };
+  const model = { provider: "openrouter", id: "z-ai/glm-5.2:free" };
   const client = new PiLlmClient({
     model,
     modelRegistry: {
       getAvailable: () => [model],
-      find: () => model,
+      find: (provider, id) => (provider === "openrouter" && id === "z-ai/glm-5.2:free" ? model : undefined),
       hasConfiguredAuth: () => true,
       complete: async (_model, _context, options) => {
         seenOptions = options;
@@ -107,6 +107,7 @@ test("planner model calls carry bounded provider options and account usage", asy
   await client.classify("task", "repo", []);
   assert.equal(seenOptions.timeoutMs, 17_000);
   assert.equal(seenOptions.maxTokens, 12_345);
+  assert.equal(seenOptions.reasoningEffort, undefined);
   assert.equal(accounted, 15);
 });
 

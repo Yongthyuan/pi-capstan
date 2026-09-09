@@ -1,0 +1,16 @@
+{
+  "version": "0.11.0-baseline-100",
+  "suite": "smoke",
+  "cases": [
+    "T01-two-markers@ts-monorepo",
+    "T01-two-markers@python-service",
+    "T01-two-markers@mixed",
+    "T02-oauth-split@ts-monorepo",
+    "T04-three-wave@ts-monorepo",
+    "T05-tests-only@ts-monorepo",
+    "T41-health-endpoint@python-service",
+    "T42-usercreate-schema@python-service",
+    "T61-echo-client-server@mixed",
+    "T89-docs-verification-section@docs-noise"
+  ]
+}

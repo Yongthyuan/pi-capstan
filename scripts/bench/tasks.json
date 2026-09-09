@@ -1,0 +1,2564 @@
+{
+  "version": "0.11.0-baseline-100",
+  "fixtures": [
+    "ts-monorepo",
+    "python-service",
+    "mixed",
+    "diamond-graph",
+    "docs-noise",
+    "ts-shared-pkg"
+  ],
+  "suites": {
+    "smoke": {
+      "description": "PR/local fast planner regression (~10 cases)"
+    },
+    "core": {
+      "description": "Weekly trend suite (~30 cases)"
+    },
+    "full": {
+      "description": "100 distinct coding-task prompts"
+    }
+  },
+  "tasks": [
+    {
+      "fixtures": [
+        "ts-monorepo",
+        "python-service",
+        "mixed"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "smoke",
+        "lang:multi"
+      ],
+      "id": "T01-two-markers",
+      "smoke": true,
+      "core": true,
+      "category": "split_independent",
+      "familyId": "two-markers",
+      "fixture": "ts-monorepo",
+      "prompt": "Create alpha.txt and beta.txt as two fully independent worker tasks. Each task owns only its exact file and uses `true` as its acceptance command. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T02-oauth-split",
+      "smoke": true,
+      "core": true,
+      "category": "contracts",
+      "familyId": "oauth-login",
+      "fixture": "ts-monorepo",
+      "prompt": "Implement OAuth-style login: add AuthService.login in packages/auth, a login route in packages/api, and a short README note. Split into parallel workers with clear ownedPaths and an interface contract for login(username, password) -> User. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 5,
+        "expectContracts": true
+      },
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts",
+        "shared"
+      ],
+      "id": "T03-shared-types",
+      "core": true,
+      "category": "contracts",
+      "familyId": "user-email-verified",
+      "fixture": "ts-monorepo",
+      "prompt": "Extend the shared User type with optional emailVerified boolean in packages/shared (or packages/auth if shared is absent), update the API serializer in packages/api, and add a unit test. Avoid overlapping ownedPaths; put shared type changes in a dedicated task or sharedPaths. Define a contract for the User shape. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T04-three-wave",
+      "smoke": true,
+      "core": true,
+      "category": "dep_chain",
+      "familyId": "session-wave",
+      "fixture": "ts-monorepo",
+      "prompt": "Three-wave dependency: (1) add packages/db/src/sessions.ts exporting createSession, (2) AuthService must call createSession, (3) API login route must call AuthService.login. Declare dependsOn so wave order is required. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 4,
+        "expectChainDepth": 3
+      },
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "lang:ts",
+        "tests"
+      ],
+      "id": "T05-tests-only",
+      "smoke": true,
+      "core": true,
+      "category": "solo_correct",
+      "familyId": "auth-test-only",
+      "fixture": "ts-monorepo",
+      "prompt": "Add a focused unit test for AuthService.login without changing production code beyond what the test requires. Prefer a single worker. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T06-rename-login",
+      "core": true,
+      "category": "rename_refactor",
+      "familyId": "rename-authenticate",
+      "fixture": "ts-monorepo",
+      "prompt": "Rename packages/auth export authenticate to login (keep authenticate as a deprecated alias), update API callers, and adjust tests. Keep ownedPaths non-overlapping. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo",
+        "python-service",
+        "mixed"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "docs"
+      ],
+      "id": "T07-docs-changelog",
+      "core": true,
+      "category": "docs_meta",
+      "familyId": "docs-changelog",
+      "fixture": "ts-monorepo",
+      "prompt": "Update README with a short 'Verification' section describing how to run tests, and append a CHANGELOG.md entry for today. Two independent file-owned tasks. Acceptance commands must be allowlisted (prefer `true`). Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T08-logout-endpoint",
+      "core": true,
+      "category": "contracts",
+      "familyId": "logout",
+      "fixture": "ts-monorepo",
+      "prompt": "Add AuthService.logout(sessionId) and an API /logout route. Define an interface contract for logout. Split auth vs api workers with non-overlapping ownedPaths. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T09-password-hash",
+      "core": true,
+      "category": "dep_chain",
+      "familyId": "password-hash",
+      "fixture": "ts-monorepo",
+      "prompt": "Add a hashPassword helper in packages/auth, make login use it, and cover with tests. hashPassword must land before login changes (dependsOn chain depth >= 2). Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T10-rate-limit",
+      "category": "split_independent",
+      "familyId": "rate-limit",
+      "fixture": "ts-monorepo",
+      "prompt": "Add a simple rateLimit middleware module under packages/api and attach it to the login route. Split middleware authoring and route wiring into workers with clear ownedPaths. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T11-user-dto-contract",
+      "core": true,
+      "category": "contracts",
+      "familyId": "user-dto",
+      "fixture": "ts-monorepo",
+      "prompt": "Introduce a UserDTO serialization contract: auth produces User, api consumes serializeUser(User). Parallel workers must reference the same contract id. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts",
+        "shared"
+      ],
+      "id": "T12-error-codes",
+      "core": true,
+      "category": "contracts",
+      "familyId": "auth-error-codes",
+      "fixture": "ts-monorepo",
+      "prompt": "Define AuthErrorCode enum in a shared location and map it to HTTP status in packages/api. Auth throws AuthError; api maps codes. Avoid ownedPaths overlap on the shared enum file. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T13-session-cookie",
+      "category": "contracts",
+      "familyId": "session-cookie",
+      "fixture": "ts-monorepo",
+      "prompt": "Auth provides SessionPayload { sessionId, userId }; API login sets a Set-Cookie style header helper. Define a SessionPayload contract and split workers. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T14-refresh-token-wave",
+      "category": "dep_chain",
+      "familyId": "refresh-token",
+      "fixture": "ts-monorepo",
+      "prompt": "Three-wave: packages/db refresh-token store -> AuthService.refresh -> API /refresh route. dependsOn must encode the chain. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 5,
+        "expectChainDepth": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T15-split-auth-types",
+      "category": "rename_refactor",
+      "familyId": "extract-user-type",
+      "fixture": "ts-monorepo",
+      "prompt": "Move User type out of the auth service file into a dedicated types module (shared or auth/types), update imports, keep tests green. Behavior unchanged. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts",
+        "tests"
+      ],
+      "id": "T16-login-integration-test",
+      "category": "tests",
+      "familyId": "login-integration",
+      "fixture": "ts-monorepo",
+      "prompt": "Add a cross-package integration-style test that calls the API login route against AuthService. Minimize production code changes. Prefer 1–2 workers. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "config"
+      ],
+      "id": "T17-capstan-verify-prefix",
+      "category": "docs_meta",
+      "familyId": "verify-prefix-config",
+      "fixture": "ts-monorepo",
+      "prompt": "Extend .pi/capstan.json verifyAllowedPrefixes with `npm run lint` and document it in README. Two independent tasks; do not invent unsafe shell verify commands. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T18-fix-empty-password",
+      "category": "bugfix",
+      "familyId": "empty-password",
+      "fixture": "ts-monorepo",
+      "prompt": "Ensure AuthService.login throws a clear error on empty password and add a regression test. Narrow ownedPaths. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "docs",
+        "tests"
+      ],
+      "id": "T19-parallel-readme-and-test",
+      "category": "split_independent",
+      "familyId": "readme-and-test",
+      "fixture": "ts-monorepo",
+      "prompt": "Independently: strengthen auth service.test assertions AND add a README usage example for login. No dependsOn between them. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T20-audit-log-stub",
+      "category": "contracts",
+      "familyId": "audit-log",
+      "fixture": "ts-monorepo",
+      "prompt": "Add AuditLogger.log(event) in auth and call it from API login on success. Contract for log(event: {type:string}). Non-overlapping ownedPaths. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "overlap-paths",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T21-overlap-bait-same-file",
+      "core": true,
+      "category": "path_scope",
+      "familyId": "overlap-bait-service",
+      "fixture": "ts-monorepo",
+      "prompt": "Strengthen AuthService.login validation AND improve loginRoute error messages. Do NOT give two workers overlapping ownedPaths on the same file; split by package (auth vs api). Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "hallucinated-contract",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T22-fake-entity-oauth2",
+      "category": "adversarial",
+      "familyId": "hallucinated-oauth2",
+      "fixture": "ts-monorepo",
+      "prompt": "Integrate OAuth2Provider.exchangeCode (this symbol does NOT exist in the repo). Prefer creating a real new module over inventing contracts that reference missing entities. If you add a contract, its definition tokens must map to files you also create. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "wrong-deps",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T23-wrong-dep-bait",
+      "category": "adversarial",
+      "familyId": "wrong-dep-tests",
+      "fixture": "ts-monorepo",
+      "prompt": "Add an API health route and strengthen auth unit tests. These can run in parallel — do NOT make the API task dependOn the test task. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "oversplit",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial",
+        "docs"
+      ],
+      "id": "T24-oversplit-docs",
+      "category": "adversarial",
+      "familyId": "oversplit-readme",
+      "fixture": "ts-monorepo",
+      "prompt": "Update three short README subsections (install, verify, FAQ). Prefer at most 2–3 workers total — do not create one worker per paragraph. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "undersplit",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T25-undersplit-three-pkgs",
+      "core": true,
+      "category": "dep_chain",
+      "familyId": "kv-wave",
+      "fixture": "ts-monorepo",
+      "prompt": "Add packages/db kv store, make AuthService use it, expose /kv via API. Must be multi-wave (chain depth >= 3). Forbidden: a single worker owning all three packages. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 5,
+        "expectChainDepth": 3
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "config"
+      ],
+      "id": "T26-package-json-shared",
+      "category": "docs_meta",
+      "familyId": "root-script",
+      "fixture": "ts-monorepo",
+      "prompt": "Add a root package.json script \"typecheck\" and add brief comments in auth and api package.json. Treat root package.json / lockfiles as sharedPaths if touched by multiple workers. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T27-diamond-types-first",
+      "core": true,
+      "category": "dep_chain",
+      "familyId": "user-profile-diamond",
+      "fixture": "ts-monorepo",
+      "prompt": "First land a UserProfile type (shared), then parallel auth.getProfile and API /profile that both use it. Shared type task must precede the two consumers (chain depth >= 2) and include a contract. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 5,
+        "expectContracts": true,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts",
+        "docs"
+      ],
+      "id": "T28-deprecate-authenticate",
+      "category": "rename_refactor",
+      "familyId": "deprecate-auth",
+      "fixture": "ts-monorepo",
+      "prompt": "Mark authenticate deprecated in code comments, document migration in README, switch API callers to login. Keep scopes clean. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T29-health-in-api",
+      "category": "solo_correct",
+      "familyId": "api-health",
+      "fixture": "ts-monorepo",
+      "prompt": "Add only an API /health helper under packages/api. Do not modify auth. Prefer a single narrow worker. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T30-contract-login-shape",
+      "category": "contracts",
+      "familyId": "login-contract-strict",
+      "fixture": "ts-monorepo",
+      "prompt": "Force a contract: login(username: string, password: string) => Promise<User>. Auth and API workers must list that contract id. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "tests"
+      ],
+      "id": "T31-move-test-colocate",
+      "category": "tests",
+      "familyId": "alias-test",
+      "fixture": "ts-monorepo",
+      "prompt": "Extend service tests to cover the authenticate deprecated alias without changing production API surface. Prefer solo. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T32-api-input-validation",
+      "category": "feature",
+      "familyId": "api-body-validation",
+      "fixture": "ts-monorepo",
+      "prompt": "Validate loginRoute body for missing username/password and add tests. Can parallelize with an auth comment-only docs tweak if paths don't overlap. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T33-chain-db-auth-only",
+      "category": "dep_chain",
+      "familyId": "db-auth-only",
+      "fixture": "ts-monorepo",
+      "prompt": "Only: add createSession in packages/db and wire AuthService to call it. Do NOT change API. Chain depth >= 2. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T34-refactor-auth-methods",
+      "category": "rename_refactor",
+      "familyId": "private-validate",
+      "fixture": "ts-monorepo",
+      "prompt": "Refactor AuthService: extract private validateCredentials while keeping login signature stable; update tests. Prefer 1–2 workers. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "tests"
+      ],
+      "id": "T35-bug-wrong-email-return",
+      "category": "bugfix",
+      "familyId": "email-regression",
+      "fixture": "ts-monorepo",
+      "prompt": "Add a regression test asserting login returns email equal to username. Avoid drive-by refactors. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T36-multi-contract",
+      "category": "contracts",
+      "familyId": "login-req-res",
+      "fixture": "ts-monorepo",
+      "prompt": "Define two contracts: LoginRequest and LoginResponse. Auth and API workers must reference them appropriately. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 5,
+        "expectContracts": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "generated-paths",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T37-generated-paths-bait",
+      "category": "adversarial",
+      "familyId": "openapi-generated",
+      "fixture": "ts-monorepo",
+      "prompt": "Add a stub openapi snippet under generatedPaths (e.g. .pi/capstan/generated/openapi-fragment.json), not as conflicting ownedPaths with auth/api sources. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T38-hub-spoke-errors",
+      "category": "dep_chain",
+      "familyId": "error-util-hub",
+      "fixture": "ts-monorepo",
+      "prompt": "Create a shared error utility module first; then auth and api both import it in parallel. Hub task precedes spokes (chain depth >= 2). Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 5,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "docs"
+      ],
+      "id": "T39-solo-vs-split-readme-code",
+      "category": "path_scope",
+      "familyId": "readme-and-auth",
+      "fixture": "ts-monorepo",
+      "prompt": "Update README verification docs AND change AuthService.login error text. Must be at least two independent path-owned tasks — forbid a single worker with ownedPaths [\"**\"]. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-monorepo"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "docs",
+        "config"
+      ],
+      "id": "T40-risk-note-secrets",
+      "category": "docs_meta",
+      "familyId": "env-example",
+      "fixture": "ts-monorepo",
+      "prompt": "Add .env.example with placeholder keys (no secrets) and a short auth comment about reading process.env. Do not own real .env. Independent tasks preferred. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:py"
+      ],
+      "id": "T41-health-endpoint",
+      "smoke": true,
+      "core": true,
+      "category": "feature",
+      "familyId": "py-health",
+      "fixture": "python-service",
+      "prompt": "Add a /health endpoint returning {\"status\":\"ok\"} (function-style is fine) and a pytest that covers it. Split service vs test if helpful. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:py"
+      ],
+      "id": "T42-usercreate-schema",
+      "smoke": true,
+      "core": true,
+      "category": "contracts",
+      "familyId": "py-usercreate",
+      "fixture": "python-service",
+      "prompt": "Add UserCreate schema (email, password) under app/schemas, a POST /users stub, and a pytest for validation errors. Include a contract for UserCreate. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "docs",
+        "lang:py"
+      ],
+      "id": "T43-ping-docs",
+      "core": true,
+      "category": "docs_meta",
+      "familyId": "py-readme-pytest",
+      "fixture": "python-service",
+      "prompt": "Document how to run pytest in README and tweak ping docstring. Two independent tasks. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:py"
+      ],
+      "id": "T44-users-list",
+      "core": true,
+      "category": "contracts",
+      "familyId": "py-users-list",
+      "fixture": "python-service",
+      "prompt": "Add GET /users returning an empty list, UserOut schema, and tests. Contract for UserOut. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:py"
+      ],
+      "id": "T45-service-layer-wave",
+      "core": true,
+      "category": "dep_chain",
+      "familyId": "py-service-wave",
+      "fixture": "python-service",
+      "prompt": "First add app/services/users.py create_user, then wire the router to call it. dependsOn chain depth >= 2. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "tests",
+        "lang:py"
+      ],
+      "id": "T46-pytest-only-ping",
+      "category": "solo_correct",
+      "familyId": "py-ping-test",
+      "fixture": "python-service",
+      "prompt": "Only strengthen tests/test_ping.py edge assertions. Prefer a single worker. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:py"
+      ],
+      "id": "T47-rename-ping",
+      "category": "rename_refactor",
+      "familyId": "py-rename-ping",
+      "fixture": "python-service",
+      "prompt": "Rename ping to healthcheck, keep ping as alias, update tests. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:py"
+      ],
+      "id": "T48-validation-error-shape",
+      "category": "contracts",
+      "familyId": "py-validation-error",
+      "fixture": "python-service",
+      "prompt": "Unify validation error JSON shape {field, message} as a contract; update router/service and tests. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:py"
+      ],
+      "id": "T49-dependency-injection",
+      "category": "feature",
+      "familyId": "py-get-store",
+      "fixture": "python-service",
+      "prompt": "Introduce get_store dependency helper and use it from the users router. Store module and router must have non-overlapping ownedPaths. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:py"
+      ],
+      "id": "T50-models-module-wave",
+      "category": "dep_chain",
+      "familyId": "py-models-wave",
+      "fixture": "python-service",
+      "prompt": "Add app/models.py with a User record, then update main/router to reference it. models first (chain depth >= 2). Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "overlap-paths",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial",
+        "lang:py"
+      ],
+      "id": "T51-overlap-main-bait",
+      "core": true,
+      "category": "adversarial",
+      "familyId": "py-overlap-main",
+      "fixture": "python-service",
+      "prompt": "Change ping return payload AND add /health. Split so two workers do not both own the entirety of app/main.py without a clear file split (e.g. move routes). Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "hallucinated-contract",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial",
+        "lang:py"
+      ],
+      "id": "T52-fake-redis-contract",
+      "category": "adversarial",
+      "familyId": "py-fake-redis",
+      "fixture": "python-service",
+      "prompt": "Add a RedisCache.get/set facade. There is no Redis in the fixture — create a real in-memory module rather than contracting against nonexistent redis.Redis symbols. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "wrong-deps",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial",
+        "lang:py"
+      ],
+      "id": "T53-wrong-wave-tests-first",
+      "category": "adversarial",
+      "familyId": "py-wrong-test-dep",
+      "fixture": "python-service",
+      "prompt": "Implement /ready endpoint and its pytest. Tests must not dependsOn the implementation in a reverse wave that blocks implementation — prefer parallel or implementation -> test. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "oversplit",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T54-oversplit-pyproject",
+      "category": "adversarial",
+      "familyId": "py-oversplit-meta",
+      "fixture": "python-service",
+      "prompt": "Only update pyproject.toml project description text. Use at most 2 workers. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "undersplit",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial",
+        "lang:py"
+      ],
+      "id": "T55-undersplit-crud",
+      "category": "feature",
+      "familyId": "py-crud",
+      "fixture": "python-service",
+      "prompt": "Add create/list/delete user endpoints with schemas and tests. Forbidden: one worker owning the entire CRUD surface. Prefer contracts. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 6,
+        "expectContracts": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "tests",
+        "lang:py"
+      ],
+      "id": "T56-shared-conftest",
+      "category": "tests",
+      "familyId": "py-conftest",
+      "fixture": "python-service",
+      "prompt": "Add tests/conftest.py shared fixtures used by two test modules. Conftest should precede or be sharedPaths relative to the tests (chain depth >= 2 if sequential). Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "lang:py"
+      ],
+      "id": "T57-fix-import-path",
+      "category": "bugfix",
+      "familyId": "py-init",
+      "fixture": "python-service",
+      "prompt": "Ensure app is importable (add app/__init__.py if missing) and tests import ping cleanly. Prefer narrow scope. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:py"
+      ],
+      "id": "T58-password-policy",
+      "category": "contracts",
+      "familyId": "py-password-policy",
+      "fixture": "python-service",
+      "prompt": "UserCreate rejects short passwords; service enforces policy; contract + tests. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:py"
+      ],
+      "id": "T59-delete-user-wave",
+      "category": "dep_chain",
+      "familyId": "py-delete-wave",
+      "fixture": "python-service",
+      "prompt": "models.delete_user -> service -> DELETE route; three-wave dependsOn. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 5,
+        "expectChainDepth": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "python-service"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "docs",
+        "tests"
+      ],
+      "id": "T60-changelog-and-test",
+      "category": "docs_meta",
+      "familyId": "py-changelog-test",
+      "fixture": "python-service",
+      "prompt": "Append CHANGELOG.md and add a new pytest file for ping. Independent tasks. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:mixed"
+      ],
+      "id": "T61-echo-client-server",
+      "smoke": true,
+      "core": true,
+      "category": "cross_lang",
+      "familyId": "echo-bridge",
+      "fixture": "mixed",
+      "prompt": "Add a Python /echo endpoint and a TypeScript client function echo(text) that calls it. Define a contract for JSON shape {text:string} aligned with contracts/echo.schema.json if present. Keep ownedPaths non-overlapping. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "docs"
+      ],
+      "id": "T62-ok-docs",
+      "category": "docs_meta",
+      "familyId": "mixed-docs",
+      "fixture": "mixed",
+      "prompt": "Independently update README architecture notes and client src comments. No dependsOn. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:mixed"
+      ],
+      "id": "T63-echo-status-code",
+      "core": true,
+      "category": "contracts",
+      "familyId": "echo-status",
+      "fixture": "mixed",
+      "prompt": "Upgrade echo response to {text, ok:boolean}; update server, client types, and contract/schema together without path overlap fights. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T64-client-retry",
+      "category": "solo_correct",
+      "familyId": "client-retry",
+      "fixture": "mixed",
+      "prompt": "Only add a retry wrapper on the TypeScript client. Do not modify server. Prefer solo. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:mixed"
+      ],
+      "id": "T65-server-validation",
+      "category": "feature",
+      "familyId": "echo-validate",
+      "fixture": "mixed",
+      "prompt": "Server rejects empty text; add pytest; client may add error-path test. Prefer parallel non-overlapping workers. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:mixed"
+      ],
+      "id": "T66-wave-schema-first",
+      "core": true,
+      "category": "dep_chain",
+      "familyId": "schema-first-mixed",
+      "fixture": "mixed",
+      "prompt": "First update contracts/echo.schema.json (or add it), then parallel server+client adaptations. Schema task precedes (chain depth >= 2). Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 5,
+        "expectContracts": true,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T67-rename-getOk",
+      "category": "rename_refactor",
+      "familyId": "rename-getOk",
+      "fixture": "mixed",
+      "prompt": "Rename getOk to fetchOk in the TS client and update types/tests. Server root stays. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:mixed"
+      ],
+      "id": "T68-add-version-header",
+      "category": "contracts",
+      "familyId": "api-version-header",
+      "fixture": "mixed",
+      "prompt": "Server adds X-Api-Version response field/header helper; client reads it. Contract the header/field name. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectContracts": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "overlap-paths",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T69-overlap-contract-file",
+      "category": "adversarial",
+      "familyId": "overlap-contract-md",
+      "fixture": "mixed",
+      "prompt": "Both sides need the echo contract updated. Only one writer should own contracts/echo.schema.json (or put it in sharedPaths); server and client own their code. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "hallucinated-contract",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T70-fake-grpc",
+      "category": "adversarial",
+      "familyId": "fake-grpc",
+      "fixture": "mixed",
+      "prompt": "Add an EchoService over HTTP JSON — do NOT invent gRPC/.proto entities that are not in the repo. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "wrong-deps",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T71-wrong-dep-client-on-server-test",
+      "category": "adversarial",
+      "familyId": "mixed-wrong-dep",
+      "fixture": "mixed",
+      "prompt": "Add client unit test and server pytest. Client task must not dependsOn server tests. Prefer expectIndependent. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "undersplit",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial",
+        "lang:mixed"
+      ],
+      "id": "T72-undersplit-bridge",
+      "core": true,
+      "category": "cross_lang",
+      "familyId": "echo-full-bridge",
+      "fixture": "mixed",
+      "prompt": "Deliver echo endpoint + client + tests on both sides. Forbidden: a single worker for everything. Include a contract. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 5,
+        "expectContracts": true
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:mixed"
+      ],
+      "id": "T73-health-and-echo",
+      "category": "feature",
+      "familyId": "health-and-echo",
+      "fixture": "mixed",
+      "prompt": "Add server /health and /echo with clear file ownership; client only consumes echo. Avoid overlapping ownedPaths. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 5
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "tests"
+      ],
+      "id": "T74-pytest-and-node-test",
+      "category": "tests",
+      "familyId": "mixed-tests-only",
+      "fixture": "mixed",
+      "prompt": "Add/strengthen one pytest and one node:test without production changes if possible. Independent. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:mixed"
+      ],
+      "id": "T75-bug-json-shape",
+      "category": "bugfix",
+      "familyId": "json-shape-align",
+      "fixture": "mixed",
+      "prompt": "Align client types with server JSON field names via an explicit contract; fix any drift. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts",
+        "docs"
+      ],
+      "id": "T76-config-base-url",
+      "category": "feature",
+      "familyId": "client-baseurl",
+      "fixture": "mixed",
+      "prompt": "Client supports baseUrl parameter with a README example. Prefer independent docs+code tasks. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:mixed"
+      ],
+      "id": "T77-chain-server-then-client",
+      "category": "dep_chain",
+      "familyId": "server-then-client",
+      "fixture": "mixed",
+      "prompt": "Implement server echo first; client dependsOn server task (chain depth >= 2). Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:mixed"
+      ],
+      "id": "T78-diamond-error-type",
+      "category": "dep_chain",
+      "familyId": "error-body-diamond",
+      "fixture": "mixed",
+      "prompt": "Define ErrorBody contract/schema first; then adapt server and client in parallel. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 5,
+        "expectContracts": true,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "oversplit",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial",
+        "docs"
+      ],
+      "id": "T79-oversplit-mixed-readme",
+      "category": "adversarial",
+      "familyId": "mixed-oversplit-readme",
+      "fixture": "mixed",
+      "prompt": "Only edit two README sections. At most 2 workers. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "mixed"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "generated-paths",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T80-shared-openapi-gen",
+      "category": "adversarial",
+      "familyId": "mixed-openapi-gen",
+      "fixture": "mixed",
+      "prompt": "Produce an openapi fragment as generatedPaths; server/client must not both own the same generated artifact path. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "diamond-graph"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts",
+        "diamond"
+      ],
+      "id": "T81-diamond-extend-event",
+      "core": true,
+      "category": "dep_chain",
+      "familyId": "diamond-event",
+      "fixture": "diamond-graph",
+      "prompt": "Extend core Event with a `source` field; update left producer and right consumer; then app main if needed. Core must precede left/right (chain depth >= 2). Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 5,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "diamond-graph"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "fake-parallel",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial",
+        "diamond"
+      ],
+      "id": "T82-diamond-fake-parallel",
+      "core": true,
+      "category": "adversarial",
+      "familyId": "diamond-fake-parallel",
+      "fixture": "diamond-graph",
+      "prompt": "Left wants a new Event.kind value and right wants to handle it. Do NOT schedule left+right as fully independent without a core/schema task — prevent fake parallel on Event. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 5,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "diamond-graph"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "diamond"
+      ],
+      "id": "T83-diamond-id-brand",
+      "category": "contracts",
+      "familyId": "diamond-id",
+      "fixture": "diamond-graph",
+      "prompt": "Brand Id as a contract/type alias used by Event; update core then dependents. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4,
+        "expectContracts": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "diamond-graph"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "tests",
+        "diamond"
+      ],
+      "id": "T84-diamond-tests",
+      "category": "tests",
+      "familyId": "diamond-tests",
+      "fixture": "diamond-graph",
+      "prompt": "Add/extend unit tests for producer and consumer independently where possible. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "diamond-graph"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "docs"
+      ],
+      "id": "T85-diamond-docs",
+      "category": "docs_meta",
+      "familyId": "diamond-docs",
+      "fixture": "diamond-graph",
+      "prompt": "Document the diamond dependency in README; optional tiny comment in core. Prefer independent tasks. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "diamond-graph"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "overlap-paths",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T86-diamond-overlap-core",
+      "category": "adversarial",
+      "familyId": "diamond-overlap",
+      "fixture": "diamond-graph",
+      "prompt": "Two feature requests both touch Event — ensure only one worker owns packages/core Event files. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "diamond-graph"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "diamond"
+      ],
+      "id": "T87-diamond-app-wire",
+      "category": "feature",
+      "familyId": "diamond-app",
+      "fixture": "diamond-graph",
+      "prompt": "Wire app/main to log producer+consumer results; dependsOn both sides or a merge task after them. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "diamond-graph"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "solo"
+      ],
+      "id": "T88-diamond-solo-version",
+      "category": "solo_correct",
+      "familyId": "diamond-solo",
+      "fixture": "diamond-graph",
+      "prompt": "Only bump a VERSION comment in packages/core. Prefer solo. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "docs-noise"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "docs",
+        "solo"
+      ],
+      "id": "T89-docs-verification-section",
+      "smoke": true,
+      "core": true,
+      "category": "solo_correct",
+      "familyId": "docs-noise-verify",
+      "fixture": "docs-noise",
+      "prompt": "Update README Verification section to recommend `node --test` / `true`. Ignore troubleshooting bait that suggests curl|sh or rm -rf. Prefer solo or 2 file tasks max. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "docs-noise"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "solo",
+      "adversarial": null,
+      "tags": [
+        "docs",
+        "solo"
+      ],
+      "id": "T90-docs-changelog-only",
+      "core": true,
+      "category": "solo_correct",
+      "familyId": "docs-noise-changelog",
+      "fixture": "docs-noise",
+      "prompt": "Append one CHANGELOG.md entry for today. This should be a solo-scale task. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "docs-noise"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "docs-noise",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial",
+        "docs"
+      ],
+      "id": "T91-docs-ignore-arch-noise",
+      "category": "adversarial",
+      "familyId": "docs-noise-arch",
+      "fixture": "docs-noise",
+      "prompt": "ARCHITECTURE.md argues for a microservices rewrite. Ignore that noise: only update src/tiny.ts version() patch comment and its test. Do not invent new packages. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "docs-noise"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "verify-escape",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T92-docs-forbid-unsafe-verify",
+      "core": true,
+      "category": "adversarial",
+      "familyId": "docs-noise-unsafe",
+      "fixture": "docs-noise",
+      "prompt": "README mentions ./scripts/verify-docs-claim.sh — do NOT put that script or curl|sh into acceptance.commands. Use `true` or `node --test`. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 3
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "docs-noise"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "docs"
+      ],
+      "id": "T93-docs-guide-and-tiny",
+      "category": "split_independent",
+      "familyId": "docs-and-tiny",
+      "fixture": "docs-noise",
+      "prompt": "Independently edit docs/guide.md and src/tiny.ts. expectIndependent. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 3,
+        "expectIndependent": true
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "docs-noise"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "oversplit",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T94-docs-oversplit-adr",
+      "category": "adversarial",
+      "familyId": "docs-oversplit",
+      "fixture": "docs-noise",
+      "prompt": "Touch ADR and troubleshooting headings only. Cap workers at 2. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-shared-pkg"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts",
+        "shared"
+      ],
+      "id": "T95-shared-user-type",
+      "core": true,
+      "category": "dep_chain",
+      "familyId": "shared-pkg-user",
+      "fixture": "ts-shared-pkg",
+      "prompt": "packages/shared exports User; auth and api consume it. Land shared first, then parallel consumers (chain depth >= 2) with a User contract. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 5,
+        "expectContracts": true,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-shared-pkg"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T96-ui-login-form",
+      "core": true,
+      "category": "feature",
+      "familyId": "ui-login",
+      "fixture": "ts-shared-pkg",
+      "prompt": "packages/ui LoginForm calls an api client helper; define LoginRequest contract; non-overlapping ownedPaths. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 5,
+        "expectContracts": true
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-shared-pkg"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T97-three-pkg-wave",
+      "category": "dep_chain",
+      "familyId": "shared-const-wave",
+      "fixture": "ts-shared-pkg",
+      "prompt": "shared constant -> auth uses constant -> ui displays it. Three-wave dependsOn. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 3,
+        "maxSubtasks": 5,
+        "expectChainDepth": 3
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-shared-pkg"
+      ],
+      "difficulty": "hard",
+      "expectOutcome": "plan",
+      "adversarial": {
+        "kind": "overlap-paths",
+        "expectOutcome": "plan"
+      },
+      "tags": [
+        "adversarial"
+      ],
+      "id": "T98-overlap-shared-bait",
+      "core": true,
+      "category": "adversarial",
+      "familyId": "shared-overlap",
+      "fixture": "ts-shared-pkg",
+      "prompt": "UI and API both need a shared export change — only one writer owns packages/shared. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 4
+      },
+      "suites": [
+        "full",
+        "core"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-shared-pkg"
+      ],
+      "difficulty": "easy",
+      "expectOutcome": "either",
+      "adversarial": null,
+      "tags": [
+        "solo"
+      ],
+      "id": "T99-solo-ui-copy",
+      "category": "solo_correct",
+      "familyId": "ui-copy-solo",
+      "fixture": "ts-shared-pkg",
+      "prompt": "Only change UI copy/string constant. Prefer solo. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 1,
+        "maxSubtasks": 2
+      },
+      "suites": [
+        "full"
+      ]
+    },
+    {
+      "fixtures": [
+        "ts-shared-pkg"
+      ],
+      "difficulty": "medium",
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "tags": [
+        "lang:ts"
+      ],
+      "id": "T100-shared-rename-export",
+      "category": "rename_refactor",
+      "familyId": "shared-rename",
+      "fixture": "ts-shared-pkg",
+      "prompt": "Rename a shared export and update auth/api/ui imports. Prefer shared-first then parallel updates. Acceptance commands must use only allowlisted prefixes such as `true`, `npm test`, `node --test`, `pytest`, or `python -m pytest`. Never use shell pipes, curl|sh, or rm -rf.",
+      "golden": {
+        "minSubtasks": 2,
+        "maxSubtasks": 5,
+        "expectChainDepth": 2
+      },
+      "suites": [
+        "full"
+      ]
+    }
+  ]
+}

@@ -1,8 +1,8 @@
 {
   "name": "pi-capstan",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "type": "module",
-  "description": "Controlled multi-agent coding pipeline for pi-coding-agent: plan-gated parallel subagents, Git-worktree isolation, DAG scheduling with path ownership, budgets, verification, merge, recovery.",
+  "description": "Multi-agent coding orchestration for Pi: parallel Git worktrees, human-approved plans, controlled merges, recovery, and verification evidence in pull requests.",
   "license": "MIT",
   "author": "Yongthyuan",
   "homepage": "https://github.com/Yongthyuan/pi-capstan#readme",
@@ -19,35 +19,53 @@
     "docs",
     "README.md",
     "README.zh-CN.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "!docs/upstream-contributions/**"
   ],
   "keywords": [
-    "pi",
+    "pi-package",
     "pi-coding-agent",
+    "pi-extension",
     "multi-agent",
-    "capstan",
-    "swarm",
-    "subagents",
+    "coding-agent",
     "ai-agents",
-    "llm",
-    "orchestration",
+    "agent-orchestration",
+    "parallel-agents",
     "git-worktree",
-    "coding-agent"
+    "human-in-the-loop",
+    "agentic-workflows",
+    "verification",
+    "pull-request",
+    "developer-tools",
+    "typescript",
+    "llm",
+    "deepseek",
+    "subagents",
+    "swarm",
+    "capstan"
   ],
   "scripts": {
     "test": "node --test test/*.test.ts",
     "test:ci": "node --test --experimental-test-isolation=none --test-force-exit test/*.test.ts",
     "test:soak": "node scripts/soak.mjs",
     "check": "tsc --noEmit && node scripts/check-syntax.mjs",
+    "bench": "node scripts/bench/run-baseline.mjs --suite smoke",
+    "bench:core": "node scripts/bench/run-baseline.mjs --suite core",
+    "bench:full": "node scripts/bench/run-baseline.mjs --suite full",
+    "bench:retry": "node scripts/bench/run-baseline.mjs --retry-errors --attempts 6",
+    "bench:validate": "node scripts/bench/run-baseline.mjs --validate",
+    "bench:export": "node scripts/bench/export-catalog.mjs",
     "test:native": "node scripts/native-smoke.mjs",
     "test:native:model": "node scripts/native-model-smoke.mjs",
     "test:native:plan": "node scripts/native-plan-smoke.mjs",
-    "test:native:e2e": "node scripts/native-e2e-smoke.mjs"
+    "test:native:e2e": "node scripts/native-e2e-smoke.mjs",
+    "evidence:compare": "node scripts/generate-release-evidence.mjs"
   },
   "pi": {
     "extensions": [
       "./index.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/Yongthyuan/pi-capstan/v0.11.0/docs/assets/capstan-overview.png"
   },
   "engines": {
     "node": ">=22.19"

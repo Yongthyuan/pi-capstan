@@ -1,0 +1,42 @@
+{
+  "kind": "deterministic report fixture; not an LLM benchmark",
+  "baseline": {
+    "version": "0.10.0",
+    "commit": "4840524d189d825bf21880d32a8429344bee53c7",
+    "reporterSha256": "242fb921c316727f5385ef163c28a220e47f49455073bcdbec5ea00f91911de7",
+    "prTemplateSha256": "a37954eba54613ede5056a69d2c23b7e9a623930addc80b01c4623c2c208afdf"
+  },
+  "current": {
+    "version": "0.11.0",
+    "reporterSha256": "b05dbf558bc84088231148c1ef18b8f5c224c2801a574321903cf7c0a56cde58"
+  },
+  "assertions": {
+    "skippedChecksRequireReview": true,
+    "passedChecksRemainSuccessful": true,
+    "missingFinalChecksRequireReview": true,
+    "syntheticPrivatePathRedacted": true
+  },
+  "artifacts": {
+    "report-fixture.json": {
+      "sha256": "e09c8de3608be141e3992914b6db5a642cbc57b831af84b08e1b8ae8e9f9e20f"
+    },
+    "before-report.md": {
+      "sha256": "056c627e673425a9c868f8d57871450de41ce2d0b8ab4d1787f8be757f1c60dd"
+    },
+    "after-report.md": {
+      "sha256": "23f4868bf28b8c0241fb444514480c6d2b0ba4aa1b295c6e6f617f42bc75e459"
+    },
+    "before-pr.md": {
+      "sha256": "8fdd02e8b653f18efd63fa911262fc58fcf9621f1a6442463d8c73e63e279d33"
+    },
+    "after-pr.md": {
+      "sha256": "30d6e70ab1da06986468fde8435ab1c8da7b31acf7bb39ddd803673b052371cd"
+    },
+    "passed-report.md": {
+      "sha256": "5beb30ab320e705f22a590dc23b8196a33b700dd56cc60b393c6df8eac5830c0"
+    },
+    "missing-final-report.md": {
+      "sha256": "b60365c0a66a56fe5f7088caf4daed9919c775319cc8b6c1802a3b6933dd0f6e"
+    }
+  }
+}

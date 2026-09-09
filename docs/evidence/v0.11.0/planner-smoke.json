@@ -1,0 +1,1412 @@
+{
+  "schemaVersion": 2,
+  "version": "0.11.0-baseline-100",
+  "suite": "smoke",
+  "attemptPolicy": "all_attempts_preserved",
+  "startedAt": "2026-09-09T15:27:17.604Z",
+  "capturedAt": "2026-09-09T16:11:29.481Z",
+  "finished": true,
+  "stopReason": null,
+  "model": "deepseek/deepseek-v4-flash",
+  "modelInfo": {
+    "api": "openai-completions",
+    "baseUrl": "https://api.deepseek.com",
+    "cost": {
+      "input": 0.44,
+      "output": 1.32,
+      "cacheRead": 0.014,
+      "cacheWrite": 0
+    },
+    "maxTokens": 384000
+  },
+  "runtime": {
+    "pi": "0.84.1",
+    "node": "v24.18.0"
+  },
+  "source": {
+    "head": "4840524d189d825bf21880d32a8429344bee53c7",
+    "dirty": true,
+    "contentSha256": "f8f81be4bc04fabf90616dd0db4f2a6c40dba5be0870ccd5014d72fe0833e4ba",
+    "files": [
+      "index.ts",
+      "package-lock.json",
+      "package.json",
+      "scripts/bench/catalog-summary.json",
+      "scripts/bench/export-catalog.mjs",
+      "scripts/bench/fixtures-materialize.mjs",
+      "scripts/bench/load-tasks.mjs",
+      "scripts/bench/metrics.ts",
+      "scripts/bench/pi-client.mjs",
+      "scripts/bench/run-baseline.mjs",
+      "scripts/bench/suites/smoke.lock.json",
+      "scripts/bench/task-catalog.mjs",
+      "scripts/bench/tasks.json",
+      "src/analyzer.ts",
+      "src/cases.ts",
+      "src/command.ts",
+      "src/compat.ts",
+      "src/config-validator.ts",
+      "src/config-wizard.ts",
+      "src/config.ts",
+      "src/gate.ts",
+      "src/guard-template.ts",
+      "src/index.ts",
+      "src/llm.ts",
+      "src/metrics.ts",
+      "src/model-policy.ts",
+      "src/orchestrator.ts",
+      "src/plan-validation.ts",
+      "src/planner.ts",
+      "src/plugin-loader.ts",
+      "src/plugins/index.ts",
+      "src/plugins/interfaces.ts",
+      "src/plugins/registry.ts",
+      "src/process-identity.ts",
+      "src/repo-lock.ts",
+      "src/reporter.ts",
+      "src/serial-queue.ts",
+      "src/service.ts",
+      "src/state.ts",
+      "src/types.ts",
+      "src/ui/dashboard.ts",
+      "src/ui/plan-panel.ts",
+      "src/utils.ts",
+      "src/verifier.ts",
+      "src/worker.ts",
+      "src/workspace.ts"
+    ]
+  },
+  "catalogSha256": "3166a9339fc91324f6a1d26db179506705c2e3d7e468fdb5402e1d015b53341e",
+  "configSha256": "b8285f0ac2754b5335e2dd4b0553b869c6cec378fcce198afc946d3091d619af",
+  "config": {
+    "gate": {
+      "model": "deepseek/deepseek-v4-flash",
+      "ruleThresholdHigh": 5,
+      "ruleThresholdLow": 0
+    },
+    "planner": {
+      "model": "deepseek/deepseek-v4-flash",
+      "maxSubtasks": 6,
+      "repoMapTokens": 4500,
+      "schemaRetries": 2,
+      "timeoutSec": 120,
+      "budgetUsd": 1,
+      "tokenLimit": 16000
+    },
+    "worker": {
+      "model": "deepseek/deepseek-v4-flash",
+      "maxConcurrency": 4,
+      "maxRetries": 2,
+      "stallSec": 180,
+      "wallClockMin": 25,
+      "perAgentBudgetUsd": 2,
+      "perAgentTokenLimit": 250000,
+      "tools": [
+        "read",
+        "bash",
+        "edit",
+        "write",
+        "grep",
+        "find",
+        "ls",
+        "capstan_send",
+        "capstan_inbox",
+        "capstan_fs"
+      ],
+      "setupCommands": [],
+      "setupTimeoutSec": 300,
+      "shareDependencyDirs": [
+        "node_modules"
+      ],
+      "scopeAllowlist": [
+        "package-lock.json",
+        "npm-shrinkwrap.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+        "bun.lock",
+        "bun.lockb",
+        "Cargo.lock",
+        "poetry.lock",
+        "uv.lock"
+      ],
+      "scopeViolationPolicy": "revert",
+      "strictBash": false,
+      "bestOfN": 1,
+      "bestOfNJudge": true
+    },
+    "run": {
+      "budgetUsd": 8,
+      "tokenLimit": 1000000,
+      "mergeStrategy": "branch",
+      "verify": {
+        "worker": null,
+        "integrationLight": null,
+        "full": null
+      },
+      "verifyTimeoutSec": 300,
+      "verifyAllowedPrefixes": [
+        "npm test",
+        "npm run",
+        "npm exec --no --",
+        "pnpm test",
+        "pnpm run",
+        "pnpm exec",
+        "yarn test",
+        "yarn run",
+        "yarn exec",
+        "bun test",
+        "bun run",
+        "python -m pytest",
+        "python3 -m pytest",
+        "pytest",
+        "cargo test",
+        "cargo check",
+        "cargo build",
+        "cargo clippy",
+        "go test",
+        "go build",
+        "go vet",
+        "./gradlew test",
+        "./gradlew check",
+        "./gradlew build",
+        "mvn test",
+        "mvn verify",
+        "dotnet test",
+        "dotnet build",
+        "./node_modules/.bin/tsc",
+        "true",
+        "python",
+        "python3",
+        "node --test"
+      ],
+      "setupAllowedPrefixes": [
+        "npm ci",
+        "npm install",
+        "pnpm install",
+        "yarn install",
+        "bun install",
+        "python -m pip install",
+        "python3 -m pip install",
+        "uv sync",
+        "cargo fetch"
+      ],
+      "failurePolicy": "continue-independent",
+      "verificationStrategy": null,
+      "schedulingStrategy": null,
+      "collaborationPrimitives": []
+    },
+    "approvalPolicy": "route",
+    "bashDenylist": [
+      "\\bgit\\b[^\\n]*(?:\\s)(?:add|am|apply|bisect|branch|checkout|cherry-pick|clean|commit|merge|mv|push|rebase|reset|restore|revert|rm|switch|tag|update-index|update-ref|worktree)\\b",
+      "\\bsudo\\b",
+      "\\brm\\b[^\\n]*\\s-rf\\s+[/~]",
+      "\\b(?:curl|wget)\\b[^|\\n]*\\|\\s*(?:sh|bash|zsh)\\b",
+      "(?:^|[;&|]\\s*)(?:rm|mv|cp|touch|mkdir|install|ln|truncate|dd|tee)\\b",
+      "\\b(?:sed\\s+-[^\\n]*i|perl\\s+-[^\\n]*i)\\b",
+      "(?:^|[^<])>{1,2}(?:[^>]|$)"
+    ],
+    "caseStore": {
+      "enabled": false,
+      "max": 200,
+      "threshold": 0.35,
+      "matcher": "hybrid"
+    },
+    "retention": {
+      "logsDays": 14,
+      "sessionsDays": 30
+    },
+    "ui": {
+      "renderThrottleMs": 250,
+      "reportTriggerTurn": false,
+      "approvalBatchMs": 100
+    },
+    "safetyGuardPath": null
+  },
+  "costNote": "Pi catalog estimate; all recorded attempts included, provider billing is authoritative.",
+  "executionBudgetUsd": 1,
+  "executionCost": 0.43296183200000005,
+  "catalog": {
+    "version": "0.11.0-baseline-100",
+    "taskCount": 100,
+    "fixtureCount": 6,
+    "fullCases": 104,
+    "smokeCases": 10,
+    "coreCases": 36,
+    "byCategory": {
+      "split_independent": 4,
+      "contracts": 16,
+      "dep_chain": 16,
+      "solo_correct": 8,
+      "rename_refactor": 7,
+      "docs_meta": 8,
+      "tests": 5,
+      "bugfix": 4,
+      "path_scope": 2,
+      "adversarial": 19,
+      "feature": 9,
+      "cross_lang": 2
+    }
+  },
+  "plannedCases": 10,
+  "processedCases": 10,
+  "plannedCompletionRate": 0.4,
+  "retriedErrors": 0,
+  "totals": {
+    "runs": 10,
+    "attempts": 10,
+    "planOk": 3,
+    "solo": 1,
+    "errors": 6,
+    "invalid": 0,
+    "firstPassValidRate": 0.3,
+    "firstAttemptCompletionRate": 0.4,
+    "schemaFirstFailRate": 0.6,
+    "contractEntityHitRate": null,
+    "goldenPassRate": 1,
+    "plannerQualityScore": 0.4,
+    "qualityEligibleCases": 10,
+    "completionRate": 0.4,
+    "eligibleCompletionRate": 0.4,
+    "soloRegretRate": 0,
+    "soloMissRate": null,
+    "infraFailRate": 0,
+    "totalCost": 0.43296183200000005,
+    "totalTokens": 337439,
+    "medianWallMs": 374667.5,
+    "crossTabs": {
+      "byCategory": {
+        "split_independent": {
+          "n": 3,
+          "planOk": 3,
+          "solo": 0,
+          "errors": 0,
+          "goldenPass": 3,
+          "qualityPass": 3
+        },
+        "contracts": {
+          "n": 2,
+          "planOk": 0,
+          "solo": 0,
+          "errors": 2,
+          "goldenPass": 0,
+          "qualityPass": 0
+        },
+        "dep_chain": {
+          "n": 1,
+          "planOk": 0,
+          "solo": 0,
+          "errors": 1,
+          "goldenPass": 0,
+          "qualityPass": 0
+        },
+        "solo_correct": {
+          "n": 2,
+          "planOk": 0,
+          "solo": 1,
+          "errors": 1,
+          "goldenPass": 0,
+          "qualityPass": 1
+        },
+        "feature": {
+          "n": 1,
+          "planOk": 0,
+          "solo": 0,
+          "errors": 1,
+          "goldenPass": 0,
+          "qualityPass": 0
+        },
+        "cross_lang": {
+          "n": 1,
+          "planOk": 0,
+          "solo": 0,
+          "errors": 1,
+          "goldenPass": 0,
+          "qualityPass": 0
+        }
+      },
+      "byFixture": {
+        "ts-monorepo": {
+          "n": 4,
+          "planOk": 1,
+          "solo": 1,
+          "errors": 2,
+          "goldenPass": 1,
+          "qualityPass": 2
+        },
+        "python-service": {
+          "n": 3,
+          "planOk": 1,
+          "solo": 0,
+          "errors": 2,
+          "goldenPass": 1,
+          "qualityPass": 1
+        },
+        "mixed": {
+          "n": 2,
+          "planOk": 1,
+          "solo": 0,
+          "errors": 1,
+          "goldenPass": 1,
+          "qualityPass": 1
+        },
+        "docs-noise": {
+          "n": 1,
+          "planOk": 0,
+          "solo": 0,
+          "errors": 1,
+          "goldenPass": 0,
+          "qualityPass": 0
+        }
+      },
+      "byDifficulty": {
+        "easy": {
+          "n": 6,
+          "planOk": 3,
+          "solo": 1,
+          "errors": 2,
+          "goldenPass": 3,
+          "qualityPass": 4
+        },
+        "medium": {
+          "n": 3,
+          "planOk": 0,
+          "solo": 0,
+          "errors": 3,
+          "goldenPass": 0,
+          "qualityPass": 0
+        },
+        "hard": {
+          "n": 1,
+          "planOk": 0,
+          "solo": 0,
+          "errors": 1,
+          "goldenPass": 0,
+          "qualityPass": 0
+        }
+      },
+      "byFailClass": {
+        "json_parse": 6
+      }
+    }
+  },
+  "rows": [
+    {
+      "taskId": "T01-two-markers",
+      "fixture": "ts-monorepo",
+      "category": "split_independent",
+      "difficulty": "easy",
+      "familyId": "two-markers",
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ],
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "wallMs": 81695,
+      "cost": 0.01411916,
+      "tokens": 11689,
+      "schemaRetriesUsed": 0,
+      "firstPassValid": true,
+      "error": null,
+      "attemptAt": "2026-09-09T15:28:39.955Z",
+      "outcome": "plan",
+      "subtaskCount": 2,
+      "contractCount": 0,
+      "golden": {
+        "subtaskCountInRange": true,
+        "independent": true,
+        "pass": true
+      },
+      "contractEntity": {
+        "checked": 0,
+        "hits": 0
+      },
+      "plan": {
+        "schemaVersion": 1,
+        "taskSummary": "Create root-level alpha.txt and beta.txt as two fully independent worker tasks in isolated git worktrees, each with the no-op acceptance command true.",
+        "strategy": "Parallelize by exact file ownership: worker_alpha creates only alpha.txt and worker_beta creates only beta.txt. The subtasks share no owned paths, have no dependency edge, and require no contracts because no shared interface/API/schema/convention is needed. Each runs in its own isolated worktree and can be merged in any order without conflicts.",
+        "contracts": [],
+        "subtasks": [
+          {
+            "id": "worker_alpha",
+            "title": "Create alpha.txt",
+            "goal": "Create alpha.txt at the repository root without modifying any other file.",
+            "role": "Independent worker for alpha.txt",
+            "rolePrompt": "Mission: create exactly one new file, alpha.txt, at the repository root of your isolated git worktree. Scope: only alpha.txt; do not modify packages, package.json, package-lock.json, README.md, scripts, or any other path. Constraints: use simple file creation only; never use pipes, curl|sh, redirects, shell operators, or rm -rf; do not run installers or test commands; your acceptance command is intentionally the allowed no-op true, so confirm the file exists before finishing. Completion Report: state that alpha.txt was created at the repository root and list any other paths changed (expected: none).",
+            "ownedPaths": [
+              "alpha.txt"
+            ],
+            "sharedPaths": [],
+            "generatedPaths": [],
+            "readPaths": [],
+            "dependsOn": [],
+            "contracts": [],
+            "acceptance": {
+              "commands": [
+                "true"
+              ],
+              "criteria": [
+                "true exits with status 0.",
+                "The worker diff contains exactly the added path alpha.txt."
+              ]
+            },
+            "model": "deepseek/deepseek-v4-flash",
+            "estTokens": 10000
+          },
+          {
+            "id": "worker_beta",
+            "title": "Create beta.txt",
+            "goal": "Create beta.txt at the repository root without modifying any other file.",
+            "role": "Independent worker for beta.txt",
+            "rolePrompt": "Mission: create exactly one new file, beta.txt, at the repository root of your isolated git worktree. Scope: only beta.txt; do not modify packages, package.json, package-lock.json, README.md, scripts, or any other path. Constraints: use simple file creation only; never use pipes, curl|sh, redirects, shell operators, or rm -rf; do not run installers or test commands; your acceptance command is intentionally the allowed no-op true, so confirm the file exists before finishing. Completion Report: state that beta.txt was created at the repository root and list any other paths changed (expected: none).",
+            "ownedPaths": [
+              "beta.txt"
+            ],
+            "sharedPaths": [],
+            "generatedPaths": [],
+            "readPaths": [],
+            "dependsOn": [],
+            "contracts": [],
+            "acceptance": {
+              "commands": [
+                "true"
+              ],
+              "criteria": [
+                "true exits with status 0.",
+                "The worker diff contains exactly the added path beta.txt."
+              ]
+            },
+            "model": "deepseek/deepseek-v4-flash",
+            "estTokens": 10000
+          }
+        ],
+        "mergeOrder": [
+          "worker_alpha",
+          "worker_beta"
+        ],
+        "risks": [
+          "Because each acceptance command is true, file creation is not actually asserted by command execution; ownership constraints and Completion Reports are the primary safeguards.",
+          "The two root-level files do not conflict, but any unplanned modification to shared paths by a worker could affect a clean merge.",
+          "File content is not enforced; this is consistent with the task instruction to use true as the acceptance command."
+        ]
+      },
+      "failClass": null,
+      "qualityPass": true,
+      "benchAttempt": 1,
+      "attempts": [
+        {
+          "taskId": "T01-two-markers",
+          "fixture": "ts-monorepo",
+          "category": "split_independent",
+          "difficulty": "easy",
+          "familyId": "two-markers",
+          "suites": [
+            "full",
+            "smoke",
+            "core"
+          ],
+          "expectOutcome": "plan",
+          "adversarial": null,
+          "model": "deepseek/deepseek-v4-flash",
+          "wallMs": 81695,
+          "cost": 0.01411916,
+          "tokens": 11689,
+          "schemaRetriesUsed": 0,
+          "firstPassValid": true,
+          "error": null,
+          "attemptAt": "2026-09-09T15:28:39.955Z",
+          "outcome": "plan",
+          "subtaskCount": 2,
+          "contractCount": 0,
+          "golden": {
+            "subtaskCountInRange": true,
+            "independent": true,
+            "pass": true
+          },
+          "contractEntity": {
+            "checked": 0,
+            "hits": 0
+          },
+          "plan": {
+            "schemaVersion": 1,
+            "taskSummary": "Create root-level alpha.txt and beta.txt as two fully independent worker tasks in isolated git worktrees, each with the no-op acceptance command true.",
+            "strategy": "Parallelize by exact file ownership: worker_alpha creates only alpha.txt and worker_beta creates only beta.txt. The subtasks share no owned paths, have no dependency edge, and require no contracts because no shared interface/API/schema/convention is needed. Each runs in its own isolated worktree and can be merged in any order without conflicts.",
+            "contracts": [],
+            "subtasks": [
+              {
+                "id": "worker_alpha",
+                "title": "Create alpha.txt",
+                "goal": "Create alpha.txt at the repository root without modifying any other file.",
+                "role": "Independent worker for alpha.txt",
+                "rolePrompt": "Mission: create exactly one new file, alpha.txt, at the repository root of your isolated git worktree. Scope: only alpha.txt; do not modify packages, package.json, package-lock.json, README.md, scripts, or any other path. Constraints: use simple file creation only; never use pipes, curl|sh, redirects, shell operators, or rm -rf; do not run installers or test commands; your acceptance command is intentionally the allowed no-op true, so confirm the file exists before finishing. Completion Report: state that alpha.txt was created at the repository root and list any other paths changed (expected: none).",
+                "ownedPaths": [
+                  "alpha.txt"
+                ],
+                "sharedPaths": [],
+                "generatedPaths": [],
+                "readPaths": [],
+                "dependsOn": [],
+                "contracts": [],
+                "acceptance": {
+                  "commands": [
+                    "true"
+                  ],
+                  "criteria": [
+                    "true exits with status 0.",
+                    "The worker diff contains exactly the added path alpha.txt."
+                  ]
+                },
+                "model": "deepseek/deepseek-v4-flash",
+                "estTokens": 10000
+              },
+              {
+                "id": "worker_beta",
+                "title": "Create beta.txt",
+                "goal": "Create beta.txt at the repository root without modifying any other file.",
+                "role": "Independent worker for beta.txt",
+                "rolePrompt": "Mission: create exactly one new file, beta.txt, at the repository root of your isolated git worktree. Scope: only beta.txt; do not modify packages, package.json, package-lock.json, README.md, scripts, or any other path. Constraints: use simple file creation only; never use pipes, curl|sh, redirects, shell operators, or rm -rf; do not run installers or test commands; your acceptance command is intentionally the allowed no-op true, so confirm the file exists before finishing. Completion Report: state that beta.txt was created at the repository root and list any other paths changed (expected: none).",
+                "ownedPaths": [
+                  "beta.txt"
+                ],
+                "sharedPaths": [],
+                "generatedPaths": [],
+                "readPaths": [],
+                "dependsOn": [],
+                "contracts": [],
+                "acceptance": {
+                  "commands": [
+                    "true"
+                  ],
+                  "criteria": [
+                    "true exits with status 0.",
+                    "The worker diff contains exactly the added path beta.txt."
+                  ]
+                },
+                "model": "deepseek/deepseek-v4-flash",
+                "estTokens": 10000
+              }
+            ],
+            "mergeOrder": [
+              "worker_alpha",
+              "worker_beta"
+            ],
+            "risks": [
+              "Because each acceptance command is true, file creation is not actually asserted by command execution; ownership constraints and Completion Reports are the primary safeguards.",
+              "The two root-level files do not conflict, but any unplanned modification to shared paths by a worker could affect a clean merge.",
+              "File content is not enforced; this is consistent with the task instruction to use true as the acceptance command."
+            ]
+          },
+          "failClass": null,
+          "qualityPass": true,
+          "benchAttempt": 1
+        }
+      ]
+    },
+    {
+      "taskId": "T01-two-markers",
+      "fixture": "python-service",
+      "category": "split_independent",
+      "difficulty": "easy",
+      "familyId": "two-markers",
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ],
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "wallMs": 171471,
+      "cost": 0.019570320000000002,
+      "tokens": 15674,
+      "schemaRetriesUsed": 0,
+      "firstPassValid": true,
+      "error": null,
+      "attemptAt": "2026-09-09T15:31:32.545Z",
+      "outcome": "plan",
+      "subtaskCount": 2,
+      "contractCount": 0,
+      "golden": {
+        "subtaskCountInRange": true,
+        "independent": true,
+        "pass": true
+      },
+      "contractEntity": {
+        "checked": 0,
+        "hits": 0
+      },
+      "plan": {
+        "schemaVersion": 1,
+        "taskSummary": "Create two root-level files, alpha.txt and beta.txt, as two isolated worker tasks; each worker owns exactly one file and uses the allowlisted no-op command true for acceptance.",
+        "strategy": "Run two independent workers in separate git worktrees. alpha_worker creates alpha.txt; beta_worker creates beta.txt. There are no contracts, no shared paths, and no generated artifacts. Because the owned paths are disjoint, the merge order is arbitrary and no dependency edge is needed.",
+        "contracts": [],
+        "subtasks": [
+          {
+            "id": "alpha_worker",
+            "title": "Create alpha.txt",
+            "goal": "Create alpha.txt at the repository root in an isolated worktree.",
+            "role": "Isolated worker for alpha.txt",
+            "rolePrompt": "Mission: create the file alpha.txt at the repository root of your isolated git worktree. Scope: modify only alpha.txt; do not create, edit, or delete beta.txt or any other repository file. Constraints: use plain file-creation tooling; avoid shell pipes, redirection, remote-pipe installs, recursive deletion, and changes to any path other than alpha.txt; run the acceptance command true exactly as given. Completion Report: state that alpha.txt was created, its path alpha.txt, and that no other files were changed.",
+            "ownedPaths": [
+              "alpha.txt"
+            ],
+            "sharedPaths": [],
+            "generatedPaths": [],
+            "readPaths": [],
+            "dependsOn": [],
+            "contracts": [],
+            "acceptance": {
+              "commands": [
+                "true"
+              ],
+              "criteria": [
+                "Acceptance command true exits with code 0; worker completion report confirms alpha.txt was created at repository root."
+              ]
+            },
+            "model": "deepseek/deepseek-v4-flash",
+            "estTokens": 10000
+          },
+          {
+            "id": "beta_worker",
+            "title": "Create beta.txt",
+            "goal": "Create beta.txt at the repository root in an isolated worktree.",
+            "role": "Isolated worker for beta.txt",
+            "rolePrompt": "Mission: create the file beta.txt at the repository root of your isolated git worktree. Scope: modify only beta.txt; do not create, edit, or delete alpha.txt or any other repository file. Constraints: use plain file-creation tooling; avoid shell pipes, redirection, remote-pipe installs, recursive deletion, and changes to any path other than beta.txt; run the acceptance command true exactly as given. Completion Report: state that beta.txt was created, its path beta.txt, and that no other files were changed.",
+            "ownedPaths": [
+              "beta.txt"
+            ],
+            "sharedPaths": [],
+            "generatedPaths": [],
+            "readPaths": [],
+            "dependsOn": [],
+            "contracts": [],
+            "acceptance": {
+              "commands": [
+                "true"
+              ],
+              "criteria": [
+                "Acceptance command true exits with code 0; worker completion report confirms beta.txt was created at repository root."
+              ]
+            },
+            "model": "deepseek/deepseek-v4-flash",
+            "estTokens": 10000
+          }
+        ],
+        "mergeOrder": [
+          "alpha_worker",
+          "beta_worker"
+        ],
+        "risks": [
+          "The true acceptance command does not check the file system, so the accuracy of the completion report and a final diff/review must be relied on.",
+          "Both subtasks must run in separate worktrees; if they run in one shared worktree, they could interfere despite exclusive ownedPaths.",
+          "No content specification was provided; workers may create empty text files unless a specific content convention is added later."
+        ]
+      },
+      "failClass": null,
+      "qualityPass": true,
+      "benchAttempt": 1,
+      "attempts": [
+        {
+          "taskId": "T01-two-markers",
+          "fixture": "python-service",
+          "category": "split_independent",
+          "difficulty": "easy",
+          "familyId": "two-markers",
+          "suites": [
+            "full",
+            "smoke",
+            "core"
+          ],
+          "expectOutcome": "plan",
+          "adversarial": null,
+          "model": "deepseek/deepseek-v4-flash",
+          "wallMs": 171471,
+          "cost": 0.019570320000000002,
+          "tokens": 15674,
+          "schemaRetriesUsed": 0,
+          "firstPassValid": true,
+          "error": null,
+          "attemptAt": "2026-09-09T15:31:32.545Z",
+          "outcome": "plan",
+          "subtaskCount": 2,
+          "contractCount": 0,
+          "golden": {
+            "subtaskCountInRange": true,
+            "independent": true,
+            "pass": true
+          },
+          "contractEntity": {
+            "checked": 0,
+            "hits": 0
+          },
+          "plan": {
+            "schemaVersion": 1,
+            "taskSummary": "Create two root-level files, alpha.txt and beta.txt, as two isolated worker tasks; each worker owns exactly one file and uses the allowlisted no-op command true for acceptance.",
+            "strategy": "Run two independent workers in separate git worktrees. alpha_worker creates alpha.txt; beta_worker creates beta.txt. There are no contracts, no shared paths, and no generated artifacts. Because the owned paths are disjoint, the merge order is arbitrary and no dependency edge is needed.",
+            "contracts": [],
+            "subtasks": [
+              {
+                "id": "alpha_worker",
+                "title": "Create alpha.txt",
+                "goal": "Create alpha.txt at the repository root in an isolated worktree.",
+                "role": "Isolated worker for alpha.txt",
+                "rolePrompt": "Mission: create the file alpha.txt at the repository root of your isolated git worktree. Scope: modify only alpha.txt; do not create, edit, or delete beta.txt or any other repository file. Constraints: use plain file-creation tooling; avoid shell pipes, redirection, remote-pipe installs, recursive deletion, and changes to any path other than alpha.txt; run the acceptance command true exactly as given. Completion Report: state that alpha.txt was created, its path alpha.txt, and that no other files were changed.",
+                "ownedPaths": [
+                  "alpha.txt"
+                ],
+                "sharedPaths": [],
+                "generatedPaths": [],
+                "readPaths": [],
+                "dependsOn": [],
+                "contracts": [],
+                "acceptance": {
+                  "commands": [
+                    "true"
+                  ],
+                  "criteria": [
+                    "Acceptance command true exits with code 0; worker completion report confirms alpha.txt was created at repository root."
+                  ]
+                },
+                "model": "deepseek/deepseek-v4-flash",
+                "estTokens": 10000
+              },
+              {
+                "id": "beta_worker",
+                "title": "Create beta.txt",
+                "goal": "Create beta.txt at the repository root in an isolated worktree.",
+                "role": "Isolated worker for beta.txt",
+                "rolePrompt": "Mission: create the file beta.txt at the repository root of your isolated git worktree. Scope: modify only beta.txt; do not create, edit, or delete alpha.txt or any other repository file. Constraints: use plain file-creation tooling; avoid shell pipes, redirection, remote-pipe installs, recursive deletion, and changes to any path other than beta.txt; run the acceptance command true exactly as given. Completion Report: state that beta.txt was created, its path beta.txt, and that no other files were changed.",
+                "ownedPaths": [
+                  "beta.txt"
+                ],
+                "sharedPaths": [],
+                "generatedPaths": [],
+                "readPaths": [],
+                "dependsOn": [],
+                "contracts": [],
+                "acceptance": {
+                  "commands": [
+                    "true"
+                  ],
+                  "criteria": [
+                    "Acceptance command true exits with code 0; worker completion report confirms beta.txt was created at repository root."
+                  ]
+                },
+                "model": "deepseek/deepseek-v4-flash",
+                "estTokens": 10000
+              }
+            ],
+            "mergeOrder": [
+              "alpha_worker",
+              "beta_worker"
+            ],
+            "risks": [
+              "The true acceptance command does not check the file system, so the accuracy of the completion report and a final diff/review must be relied on.",
+              "Both subtasks must run in separate worktrees; if they run in one shared worktree, they could interfere despite exclusive ownedPaths.",
+              "No content specification was provided; workers may create empty text files unless a specific content convention is added later."
+            ]
+          },
+          "failClass": null,
+          "qualityPass": true,
+          "benchAttempt": 1
+        }
+      ]
+    },
+    {
+      "taskId": "T01-two-markers",
+      "fixture": "mixed",
+      "category": "split_independent",
+      "difficulty": "easy",
+      "familyId": "two-markers",
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ],
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "wallMs": 59250,
+      "cost": 0.01033384,
+      "tokens": 8550,
+      "schemaRetriesUsed": 0,
+      "firstPassValid": true,
+      "error": null,
+      "attemptAt": "2026-09-09T15:32:32.873Z",
+      "outcome": "plan",
+      "subtaskCount": 2,
+      "contractCount": 0,
+      "golden": {
+        "subtaskCountInRange": true,
+        "independent": true,
+        "pass": true
+      },
+      "contractEntity": {
+        "checked": 0,
+        "hits": 0
+      },
+      "plan": {
+        "schemaVersion": 1,
+        "taskSummary": "Add two independent root-level marker files alpha.txt and beta.txt, one per isolated worker task.",
+        "strategy": "Partition the work by exact file path. Each worker owns only its requested file, writes no shared paths, and has no dependency on the other worker or on existing source code. This creates a shallow DAG with two leaf tasks and no contracts. Each worker uses `true` as its acceptance command and provides a Completion Report confirming its owned file exists.",
+        "contracts": [],
+        "subtasks": [
+          {
+            "id": "worker_create_alpha",
+            "title": "Create alpha.txt",
+            "goal": "Create alpha.txt at the repository root and make no changes to any other path.",
+            "role": "alpha.txt creator",
+            "rolePrompt": "You are an independent worker operating in a dedicated isolated git worktree. Mission: create exactly one file named alpha.txt at the repository root. Scope: alpha.txt is the only path you may create or modify; do not touch beta.txt, README.md, client/, server/, contracts/, or anything else. Constraints: use only the acceptance command `true`; never use shell pipes, redirects, curl|sh, rm -rf, or unlisted commands. After completing the file, run `true` as the acceptance command and submit a Completion Report that states alpha.txt exists at the repository root and confirms no other paths were modified.",
+            "ownedPaths": [
+              "alpha.txt"
+            ],
+            "sharedPaths": [],
+            "generatedPaths": [],
+            "readPaths": [],
+            "dependsOn": [],
+            "contracts": [],
+            "acceptance": {
+              "commands": [
+                "true"
+              ],
+              "criteria": [
+                "alpha.txt exists at the repository root and is owned only by this task",
+                "`true` exits with status 0",
+                "Completion Report confirms no other paths were modified"
+              ]
+            },
+            "model": "deepseek/deepseek-v4-flash",
+            "estTokens": 2000
+          },
+          {
+            "id": "worker_create_beta",
+            "title": "Create beta.txt",
+            "goal": "Create beta.txt at the repository root and make no changes to any other path.",
+            "role": "beta.txt creator",
+            "rolePrompt": "You are an independent worker operating in a dedicated isolated git worktree. Mission: create exactly one file named beta.txt at the repository root. Scope: beta.txt is the only path you may create or modify; do not touch alpha.txt, README.md, client/, server/, contracts/, or anything else. Constraints: use only the acceptance command `true`; never use shell pipes, redirects, curl|sh, rm -rf, or unlisted commands. After completing the file, run `true` as the acceptance command and submit a Completion Report that states beta.txt exists at the repository root and confirms no other paths were modified.",
+            "ownedPaths": [
+              "beta.txt"
+            ],
+            "sharedPaths": [],
+            "generatedPaths": [],
+            "readPaths": [],
+            "dependsOn": [],
+            "contracts": [],
+            "acceptance": {
+              "commands": [
+                "true"
+              ],
+              "criteria": [
+                "beta.txt exists at the repository root and is owned only by this task",
+                "`true` exits with status 0",
+                "Completion Report confirms no other paths were modified"
+              ]
+            },
+            "model": "deepseek/deepseek-v4-flash",
+            "estTokens": 2000
+          }
+        ],
+        "mergeOrder": [
+          "worker_create_alpha",
+          "worker_create_beta"
+        ],
+        "risks": [
+          "The acceptance command `true` does not independently verify file creation; the Completion Report and merge review must confirm the exact owned file exists and no extra paths were changed.",
+          "Both workers are isolated and independent, but accidental writes to the other worker's path would cause a merge conflict; role prompts make the exclusive path ownership explicit."
+        ]
+      },
+      "failClass": null,
+      "qualityPass": true,
+      "benchAttempt": 1,
+      "attempts": [
+        {
+          "taskId": "T01-two-markers",
+          "fixture": "mixed",
+          "category": "split_independent",
+          "difficulty": "easy",
+          "familyId": "two-markers",
+          "suites": [
+            "full",
+            "smoke",
+            "core"
+          ],
+          "expectOutcome": "plan",
+          "adversarial": null,
+          "model": "deepseek/deepseek-v4-flash",
+          "wallMs": 59250,
+          "cost": 0.01033384,
+          "tokens": 8550,
+          "schemaRetriesUsed": 0,
+          "firstPassValid": true,
+          "error": null,
+          "attemptAt": "2026-09-09T15:32:32.873Z",
+          "outcome": "plan",
+          "subtaskCount": 2,
+          "contractCount": 0,
+          "golden": {
+            "subtaskCountInRange": true,
+            "independent": true,
+            "pass": true
+          },
+          "contractEntity": {
+            "checked": 0,
+            "hits": 0
+          },
+          "plan": {
+            "schemaVersion": 1,
+            "taskSummary": "Add two independent root-level marker files alpha.txt and beta.txt, one per isolated worker task.",
+            "strategy": "Partition the work by exact file path. Each worker owns only its requested file, writes no shared paths, and has no dependency on the other worker or on existing source code. This creates a shallow DAG with two leaf tasks and no contracts. Each worker uses `true` as its acceptance command and provides a Completion Report confirming its owned file exists.",
+            "contracts": [],
+            "subtasks": [
+              {
+                "id": "worker_create_alpha",
+                "title": "Create alpha.txt",
+                "goal": "Create alpha.txt at the repository root and make no changes to any other path.",
+                "role": "alpha.txt creator",
+                "rolePrompt": "You are an independent worker operating in a dedicated isolated git worktree. Mission: create exactly one file named alpha.txt at the repository root. Scope: alpha.txt is the only path you may create or modify; do not touch beta.txt, README.md, client/, server/, contracts/, or anything else. Constraints: use only the acceptance command `true`; never use shell pipes, redirects, curl|sh, rm -rf, or unlisted commands. After completing the file, run `true` as the acceptance command and submit a Completion Report that states alpha.txt exists at the repository root and confirms no other paths were modified.",
+                "ownedPaths": [
+                  "alpha.txt"
+                ],
+                "sharedPaths": [],
+                "generatedPaths": [],
+                "readPaths": [],
+                "dependsOn": [],
+                "contracts": [],
+                "acceptance": {
+                  "commands": [
+                    "true"
+                  ],
+                  "criteria": [
+                    "alpha.txt exists at the repository root and is owned only by this task",
+                    "`true` exits with status 0",
+                    "Completion Report confirms no other paths were modified"
+                  ]
+                },
+                "model": "deepseek/deepseek-v4-flash",
+                "estTokens": 2000
+              },
+              {
+                "id": "worker_create_beta",
+                "title": "Create beta.txt",
+                "goal": "Create beta.txt at the repository root and make no changes to any other path.",
+                "role": "beta.txt creator",
+                "rolePrompt": "You are an independent worker operating in a dedicated isolated git worktree. Mission: create exactly one file named beta.txt at the repository root. Scope: beta.txt is the only path you may create or modify; do not touch alpha.txt, README.md, client/, server/, contracts/, or anything else. Constraints: use only the acceptance command `true`; never use shell pipes, redirects, curl|sh, rm -rf, or unlisted commands. After completing the file, run `true` as the acceptance command and submit a Completion Report that states beta.txt exists at the repository root and confirms no other paths were modified.",
+                "ownedPaths": [
+                  "beta.txt"
+                ],
+                "sharedPaths": [],
+                "generatedPaths": [],
+                "readPaths": [],
+                "dependsOn": [],
+                "contracts": [],
+                "acceptance": {
+                  "commands": [
+                    "true"
+                  ],
+                  "criteria": [
+                    "beta.txt exists at the repository root and is owned only by this task",
+                    "`true` exits with status 0",
+                    "Completion Report confirms no other paths were modified"
+                  ]
+                },
+                "model": "deepseek/deepseek-v4-flash",
+                "estTokens": 2000
+              }
+            ],
+            "mergeOrder": [
+              "worker_create_alpha",
+              "worker_create_beta"
+            ],
+            "risks": [
+              "The acceptance command `true` does not independently verify file creation; the Completion Report and merge review must confirm the exact owned file exists and no extra paths were changed.",
+              "Both workers are isolated and independent, but accidental writes to the other worker's path would cause a merge conflict; role prompts make the exclusive path ownership explicit."
+            ]
+          },
+          "failClass": null,
+          "qualityPass": true,
+          "benchAttempt": 1
+        }
+      ]
+    },
+    {
+      "taskId": "T02-oauth-split",
+      "fixture": "ts-monorepo",
+      "category": "contracts",
+      "difficulty": "medium",
+      "familyId": "oauth-login",
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ],
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "wallMs": 398015,
+      "cost": 0.06421044000000001,
+      "tokens": 49829,
+      "schemaRetriesUsed": 2,
+      "firstPassValid": false,
+      "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+      "attemptAt": "2026-09-09T15:39:11.984Z",
+      "outcome": "error",
+      "failClass": "json_parse",
+      "qualityPass": false,
+      "benchAttempt": 1,
+      "attempts": [
+        {
+          "taskId": "T02-oauth-split",
+          "fixture": "ts-monorepo",
+          "category": "contracts",
+          "difficulty": "medium",
+          "familyId": "oauth-login",
+          "suites": [
+            "full",
+            "smoke",
+            "core"
+          ],
+          "expectOutcome": "plan",
+          "adversarial": null,
+          "model": "deepseek/deepseek-v4-flash",
+          "wallMs": 398015,
+          "cost": 0.06421044000000001,
+          "tokens": 49829,
+          "schemaRetriesUsed": 2,
+          "firstPassValid": false,
+          "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+          "attemptAt": "2026-09-09T15:39:11.984Z",
+          "outcome": "error",
+          "failClass": "json_parse",
+          "qualityPass": false,
+          "benchAttempt": 1
+        }
+      ]
+    },
+    {
+      "taskId": "T04-three-wave",
+      "fixture": "ts-monorepo",
+      "category": "dep_chain",
+      "difficulty": "hard",
+      "familyId": "session-wave",
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ],
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "wallMs": 381540,
+      "cost": 0.064219272,
+      "tokens": 49847,
+      "schemaRetriesUsed": 2,
+      "firstPassValid": false,
+      "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+      "attemptAt": "2026-09-09T15:45:34.632Z",
+      "outcome": "error",
+      "failClass": "json_parse",
+      "qualityPass": false,
+      "benchAttempt": 1,
+      "attempts": [
+        {
+          "taskId": "T04-three-wave",
+          "fixture": "ts-monorepo",
+          "category": "dep_chain",
+          "difficulty": "hard",
+          "familyId": "session-wave",
+          "suites": [
+            "full",
+            "smoke",
+            "core"
+          ],
+          "expectOutcome": "plan",
+          "adversarial": null,
+          "model": "deepseek/deepseek-v4-flash",
+          "wallMs": 381540,
+          "cost": 0.064219272,
+          "tokens": 49847,
+          "schemaRetriesUsed": 2,
+          "firstPassValid": false,
+          "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+          "attemptAt": "2026-09-09T15:45:34.632Z",
+          "outcome": "error",
+          "failClass": "json_parse",
+          "qualityPass": false,
+          "benchAttempt": 1
+        }
+      ]
+    },
+    {
+      "taskId": "T05-tests-only",
+      "fixture": "ts-monorepo",
+      "category": "solo_correct",
+      "difficulty": "easy",
+      "familyId": "auth-test-only",
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ],
+      "expectOutcome": "either",
+      "adversarial": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "wallMs": 25544,
+      "cost": 0.0045293600000000005,
+      "tokens": 4384,
+      "schemaRetriesUsed": 0,
+      "firstPassValid": false,
+      "error": null,
+      "attemptAt": "2026-09-09T15:46:01.280Z",
+      "outcome": "solo",
+      "failClass": null,
+      "qualityPass": true,
+      "benchAttempt": 1,
+      "attempts": [
+        {
+          "taskId": "T05-tests-only",
+          "fixture": "ts-monorepo",
+          "category": "solo_correct",
+          "difficulty": "easy",
+          "familyId": "auth-test-only",
+          "suites": [
+            "full",
+            "smoke",
+            "core"
+          ],
+          "expectOutcome": "either",
+          "adversarial": null,
+          "model": "deepseek/deepseek-v4-flash",
+          "wallMs": 25544,
+          "cost": 0.0045293600000000005,
+          "tokens": 4384,
+          "schemaRetriesUsed": 0,
+          "firstPassValid": false,
+          "error": null,
+          "attemptAt": "2026-09-09T15:46:01.280Z",
+          "outcome": "solo",
+          "failClass": null,
+          "qualityPass": true,
+          "benchAttempt": 1
+        }
+      ]
+    },
+    {
+      "taskId": "T41-health-endpoint",
+      "fixture": "python-service",
+      "category": "feature",
+      "difficulty": "easy",
+      "familyId": "py-health",
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ],
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "wallMs": 394723,
+      "cost": 0.06402412800000001,
+      "tokens": 49430,
+      "schemaRetriesUsed": 2,
+      "firstPassValid": false,
+      "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+      "attemptAt": "2026-09-09T15:52:37.117Z",
+      "outcome": "error",
+      "failClass": "json_parse",
+      "qualityPass": false,
+      "benchAttempt": 1,
+      "attempts": [
+        {
+          "taskId": "T41-health-endpoint",
+          "fixture": "python-service",
+          "category": "feature",
+          "difficulty": "easy",
+          "familyId": "py-health",
+          "suites": [
+            "full",
+            "smoke",
+            "core"
+          ],
+          "expectOutcome": "plan",
+          "adversarial": null,
+          "model": "deepseek/deepseek-v4-flash",
+          "wallMs": 394723,
+          "cost": 0.06402412800000001,
+          "tokens": 49430,
+          "schemaRetriesUsed": 2,
+          "firstPassValid": false,
+          "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+          "attemptAt": "2026-09-09T15:52:37.117Z",
+          "outcome": "error",
+          "failClass": "json_parse",
+          "qualityPass": false,
+          "benchAttempt": 1
+        }
+      ]
+    },
+    {
+      "taskId": "T42-usercreate-schema",
+      "fixture": "python-service",
+      "category": "contracts",
+      "difficulty": "medium",
+      "familyId": "py-usercreate",
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ],
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "wallMs": 379671,
+      "cost": 0.06407256,
+      "tokens": 49536,
+      "schemaRetriesUsed": 2,
+      "firstPassValid": false,
+      "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+      "attemptAt": "2026-09-09T15:58:57.904Z",
+      "outcome": "error",
+      "failClass": "json_parse",
+      "qualityPass": false,
+      "benchAttempt": 1,
+      "attempts": [
+        {
+          "taskId": "T42-usercreate-schema",
+          "fixture": "python-service",
+          "category": "contracts",
+          "difficulty": "medium",
+          "familyId": "py-usercreate",
+          "suites": [
+            "full",
+            "smoke",
+            "core"
+          ],
+          "expectOutcome": "plan",
+          "adversarial": null,
+          "model": "deepseek/deepseek-v4-flash",
+          "wallMs": 379671,
+          "cost": 0.06407256,
+          "tokens": 49536,
+          "schemaRetriesUsed": 2,
+          "firstPassValid": false,
+          "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+          "attemptAt": "2026-09-09T15:58:57.904Z",
+          "outcome": "error",
+          "failClass": "json_parse",
+          "qualityPass": false,
+          "benchAttempt": 1
+        }
+      ]
+    },
+    {
+      "taskId": "T61-echo-client-server",
+      "fixture": "mixed",
+      "category": "cross_lang",
+      "difficulty": "medium",
+      "familyId": "echo-bridge",
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ],
+      "expectOutcome": "plan",
+      "adversarial": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "wallMs": 377703,
+      "cost": 0.06400392,
+      "tokens": 49384,
+      "schemaRetriesUsed": 2,
+      "firstPassValid": false,
+      "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+      "attemptAt": "2026-09-09T16:05:16.729Z",
+      "outcome": "error",
+      "failClass": "json_parse",
+      "qualityPass": false,
+      "benchAttempt": 1,
+      "attempts": [
+        {
+          "taskId": "T61-echo-client-server",
+          "fixture": "mixed",
+          "category": "cross_lang",
+          "difficulty": "medium",
+          "familyId": "echo-bridge",
+          "suites": [
+            "full",
+            "smoke",
+            "core"
+          ],
+          "expectOutcome": "plan",
+          "adversarial": null,
+          "model": "deepseek/deepseek-v4-flash",
+          "wallMs": 377703,
+          "cost": 0.06400392,
+          "tokens": 49384,
+          "schemaRetriesUsed": 2,
+          "firstPassValid": false,
+          "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+          "attemptAt": "2026-09-09T16:05:16.729Z",
+          "outcome": "error",
+          "failClass": "json_parse",
+          "qualityPass": false,
+          "benchAttempt": 1
+        }
+      ]
+    },
+    {
+      "taskId": "T89-docs-verification-section",
+      "fixture": "docs-noise",
+      "category": "solo_correct",
+      "difficulty": "easy",
+      "familyId": "docs-noise-verify",
+      "suites": [
+        "full",
+        "smoke",
+        "core"
+      ],
+      "expectOutcome": "either",
+      "adversarial": null,
+      "model": "deepseek/deepseek-v4-flash",
+      "wallMs": 371632,
+      "cost": 0.063878832,
+      "tokens": 49116,
+      "schemaRetriesUsed": 2,
+      "firstPassValid": false,
+      "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+      "attemptAt": "2026-09-09T16:11:29.476Z",
+      "outcome": "error",
+      "failClass": "json_parse",
+      "qualityPass": false,
+      "benchAttempt": 1,
+      "attempts": [
+        {
+          "taskId": "T89-docs-verification-section",
+          "fixture": "docs-noise",
+          "category": "solo_correct",
+          "difficulty": "easy",
+          "familyId": "docs-noise-verify",
+          "suites": [
+            "full",
+            "smoke",
+            "core"
+          ],
+          "expectOutcome": "either",
+          "adversarial": null,
+          "model": "deepseek/deepseek-v4-flash",
+          "wallMs": 371632,
+          "cost": 0.063878832,
+          "tokens": 49116,
+          "schemaRetriesUsed": 2,
+          "firstPassValid": false,
+          "error": "计划 JSON 修复失败: 模型没有返回 JSON",
+          "attemptAt": "2026-09-09T16:11:29.476Z",
+          "outcome": "error",
+          "failClass": "json_parse",
+          "qualityPass": false,
+          "benchAttempt": 1
+        }
+      ]
+    }
+  ]
+}

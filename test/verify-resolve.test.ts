@@ -50,7 +50,8 @@ test("empty verification is skipped, not a fake pass in reports", async () => {
     planRevision: 1,
   } as unknown as CapstanRun;
   const report = buildReport(run, skipped);
-  assert.match(report, /集成全量: 跳过/);
+  assert.match(report, /最终验证/);
+  assert.match(report, /跳过/);
   assert.doesNotMatch(report, /集成全量: ✓ 无命令/);
 });
 
