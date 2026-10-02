@@ -15,7 +15,7 @@ Capstan is a [Pi coding agent](https://github.com/earendil-works/pi) extension f
 
 ## Quick start
 
-Requires **Node.js ≥22.19**, **Pi ≥0.84.1**, and a Git repository.
+Requires **Node.js ≥22.19** (TypeScript sources need Node strip-types), **Pi ≥0.84.1**, and a Git repository. `npm run check` / `npm test` fail fast with an install hint if the Node version is too old.
 
 ```bash
 pi install npm:pi-capstan

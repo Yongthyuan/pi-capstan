@@ -53,11 +53,18 @@ export function isStructurallySafeVerificationCommand(command: string): boolean 
   }
 }
 
+export type VerifyCommandMode = "commands" | "explicit-skip" | "auto-empty";
+
+export interface VerifyCommandResolution {
+  commands: string[];
+  mode: VerifyCommandMode;
+}
+
 /**
  * Resolve commands for a verification lane.
  * - non-empty `fallback` wins (worker acceptance commands)
  * - `configured === []` means explicit skip
- * - `configured === null` means auto-detect
+ * - `configured === null` means auto-detect (`auto-empty` when nothing is found)
  * - non-empty `configured` runs as-is
  */
 export async function resolveVerifyCommands(options: {
@@ -65,14 +72,42 @@ export async function resolveVerifyCommands(options: {
   cwd: string;
   full: boolean;
   fallback?: string[];
-}): Promise<string[]> {
-  if (options.fallback && options.fallback.length > 0) return options.fallback;
-  if (Array.isArray(options.configured)) return options.configured;
-  return detectVerificationCommands(options.cwd, options.full);
+}): Promise<VerifyCommandResolution> {
+  if (options.fallback && options.fallback.length > 0) {
+    return { commands: options.fallback, mode: "commands" };
+  }
+  if (Array.isArray(options.configured)) {
+    return options.configured.length
+      ? { commands: options.configured, mode: "commands" }
+      : { commands: [], mode: "explicit-skip" };
+  }
+  const detected = await detectVerificationCommands(options.cwd, options.full);
+  return detected.length
+    ? { commands: detected, mode: "commands" }
+    : { commands: [], mode: "auto-empty" };
 }
 
 export function skippedVerification(): VerificationResult {
   return { ok: true, skipped: true, commands: [] };
+}
+
+/** Fail-closed result when auto-detect finds no commands and the lane was not explicitly skipped. */
+export function missingVerification(lane: string): VerificationResult {
+  return {
+    ok: false,
+    skipped: false,
+    missingCommands: true,
+    commands: [{
+      command: `(${lane})`,
+      exitCode: 1,
+      stdout: "",
+      stderr:
+        "No verification commands auto-detected. Set run.verify.* to an explicit command list, " +
+        "or set [] to skip intentionally. Capstan will not treat an unknown stack as verified.",
+      durationMs: 0,
+      timedOut: false,
+    }],
+  };
 }
 
 export async function detectVerificationCommands(cwd: string, full: boolean): Promise<string[]> {

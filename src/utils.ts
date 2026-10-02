@@ -1,7 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import { access, chmod, mkdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
+
+/** Expand a leading `~/` to the user home directory; leave other paths unchanged. */
+export function expandHomePath(input: string): string {
+  if (input === "~") return homedir();
+  if (input.startsWith("~/") || input.startsWith("~\\")) return join(homedir(), input.slice(2));
+  return input;
+}
 
 export async function pathExists(path: string): Promise<boolean> {
   try {

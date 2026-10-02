@@ -377,7 +377,7 @@ export class CapstanService {
     const run = runId ? await store.load(runId) : this.activeRun;
     if (!run?.git || !run.merged.length) return void ctx.ui.notify("没有可发布的 last-green capstan branch", "warning");
     const branch = run.git.integrationBranch;
-    if (!(await ctx.ui.confirm("创建 GitHub Pull Request", `将 ${branch} 推送到 origin，并附上已脱敏的任务目标、验证命令和晋升证据？`))) return;
+    if (!(await ctx.ui.confirm("Create pull request", `Push ${branch} to origin and prepare a proof-carrying PR body (task goals, checks, promotion evidence)?`))) return;
     const lock = await RepoLock.forRepo(repoRoot, `pr-${run.runId}`);
     await lock.acquire();
     try {
@@ -385,8 +385,31 @@ export class CapstanService {
       if (pushed.exitCode !== 0) throw new Error(`git push 失败: ${pushed.stderr || pushed.stdout}`);
       const title = `capstan: run ${run.runId}`;
       const body = buildProofCarryingPrBody(run);
-      const created = await runCommand("gh", ["pr", "create", "--head", branch, "--title", title, "--body", body], { cwd: repoRoot, timeoutMs: 120_000 });
-      if (created.exitCode !== 0) throw new Error(`gh pr create 失败: ${created.stderr || created.stdout}`);
+      const bodyPath = join(run.runDir, "pr-body.md");
+      await ensurePrivateDir(run.runDir);
+      await writeFile(bodyPath, `${body}\n`, { mode: 0o600 });
+      const ghVersion = await runCommand("gh", ["--version"], { cwd: repoRoot, timeoutMs: 10_000 });
+      if (ghVersion.exitCode !== 0) {
+        run.prUrl = undefined;
+        await store.save(run);
+        return void ctx.ui.notify(
+          `Pushed ${branch}. GitHub CLI (gh) not found — open a PR manually.\n` +
+            `PR body written to ${bodyPath}\n` +
+            `Example: gh pr create --head ${branch} --title ${JSON.stringify(title)} --body-file ${bodyPath}`,
+          "warning",
+        );
+      }
+      const created = await runCommand("gh", ["pr", "create", "--head", branch, "--title", title, "--body-file", bodyPath], { cwd: repoRoot, timeoutMs: 120_000 });
+      if (created.exitCode !== 0) {
+        run.prUrl = undefined;
+        await store.save(run);
+        return void ctx.ui.notify(
+          `Pushed ${branch}, but PR create failed: ${created.stderr || created.stdout}\n` +
+            `PR body: ${bodyPath}\n` +
+            `Retry: gh pr create --head ${branch} --title ${JSON.stringify(title)} --body-file ${bodyPath}`,
+          "warning",
+        );
+      }
       run.prUrl = created.stdout.trim().split("\n").find((line) => /^https:\/\//.test(line));
       await store.save(run);
       ctx.ui.notify(run.prUrl ? `PR 已创建: ${run.prUrl}` : "PR 已创建", "info");

@@ -89,7 +89,7 @@ export class DefaultPluginRegistry implements PluginRegistry {
         throw new Error(`Scheduling plugin must implement schedule() method`);
       }
     } else if (type === 'collaboration') {
-      // Collaboration plugins are load-only markers / coordinate hooks.
+      // Collaboration plugins may implement coordinate(); mailbox delivery invokes it.
       // Custom tools are not injected into workers.
     }
 

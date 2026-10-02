@@ -1,9 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 import type { CaseRecord, CapstanConfig, CapstanPlan } from "./types.ts";
-import { validatePlan } from "./plan-validation.ts";
+import { sanitizePlanAcceptance, validatePlan } from "./plan-validation.ts";
 import { readTextIfPresent, runCommand, tokenizeTask, truncateTail } from "./utils.ts";
 import { JsonResponseError, type PiLlmClient } from "./llm.ts";
+import { detectVerificationCommands } from "./verifier.ts";
 
 export interface RepoBrief {
   repoRoot: string;
@@ -216,6 +217,7 @@ HARD RULES
 6. Use 2..${maxSubtasks} subtasks, a shallow DAG, and a mergeOrder that respects dependencies.
 7. If the work is not genuinely parallelizable, return {"recommend":"solo","reason":"..."}.
 8. rolePrompt states mission, scope, constraints, and requires a Completion Report.
+9. Prefer simple allowlisted acceptance commands (e.g. "npm test", "npm run check"). Never invent piped shell one-liners.
 
 Return JSON only. Use this exact structural schema:
 {"schemaVersion":1,"taskSummary":"...","strategy":"...","contracts":[{"id":"contract_id","kind":"interface","description":"...","definition":"..."}],"subtasks":[{"id":"worker_id","title":"...","goal":"...","role":"...","rolePrompt":"...","ownedPaths":["relative/path/**"],"sharedPaths":[],"generatedPaths":[],"readPaths":[],"dependsOn":[],"contracts":[],"acceptance":{"commands":["allowed command"],"criteria":["observable result"]},"model":"optional provider/model","estTokens":10000}],"mergeOrder":["worker_id"],"risks":["..."]}`;
@@ -229,9 +231,11 @@ export async function createPlan(
   config: CapstanConfig,
 ): Promise<CapstanPlan | { recommend: "solo"; reason: string }> {
   const prompt = plannerPrompt(task, brief, cases, config.planner.maxSubtasks, llm.workerModels().map((model) => `${model.provider}/${model.id}`), config.run.verifyAllowedPrefixes);
+  const defaultCommands = await detectVerificationCommands(brief.repoRoot, false);
   let result: CapstanPlan | { recommend: "solo"; reason: string } | undefined;
   let repairRaw = "";
   let repairErrors: string[] = [];
+  let lastFailure = "unable to produce a valid plan";
   for (let attempt = 0; attempt <= config.planner.schemaRetries; attempt++) {
     try {
       result = attempt === 0
@@ -241,15 +245,43 @@ export async function createPlan(
       if (!(error instanceof JsonResponseError)) throw error;
       repairRaw = error.raw;
       repairErrors = [error.message];
-      if (attempt >= config.planner.schemaRetries) throw new Error(`计划 JSON 修复失败: ${error.message}`);
+      lastFailure = `JSON repair failed: ${error.message}`;
+      if (attempt >= config.planner.schemaRetries) {
+        return {
+          recommend: "solo",
+          reason:
+            `Planner could not return valid JSON after ${config.planner.schemaRetries + 1} attempts (${error.message}). ` +
+            "Falling back to the main Pi session so the task can still proceed.",
+        };
+      }
       continue;
     }
     if ("recommend" in result) return result;
+    const sanitized = sanitizePlanAcceptance(result, config.run.verifyAllowedPrefixes, defaultCommands);
+    result = sanitized.plan;
     const validation = validatePlan(result, config.planner.maxSubtasks);
     if (validation.ok) return result;
-    if (attempt >= config.planner.schemaRetries) throw new Error(`计划校验失败:\n${validation.errors.join("\n")}`);
+    lastFailure = validation.errors.join("; ");
+    if (attempt >= config.planner.schemaRetries) {
+      return {
+        recommend: "solo",
+        reason:
+          `Planner could not produce a valid multi-agent plan after ${config.planner.schemaRetries + 1} attempts ` +
+          `(${validation.errors.slice(0, 3).join("; ")}${validation.errors.length > 3 ? "; …" : ""}). ` +
+          (sanitized.repairs.length ? `Mechanical repairs tried: ${sanitized.repairs.slice(0, 2).join("; ")}. ` : "") +
+          "Falling back to the main Pi session so the task can still proceed.",
+      };
+    }
     repairRaw = JSON.stringify(result);
-    repairErrors = validation.errors;
+    repairErrors = [
+      ...validation.errors,
+      ...sanitized.repairs.map((repair) => `note: ${repair}`),
+      "Fix acceptance.commands to simple allowlisted commands without pipes, redirects, or substitutions.",
+      "If the work is not parallelizable, return {\"recommend\":\"solo\",\"reason\":\"...\"}.",
+    ];
   }
-  throw new Error("无法生成有效计划");
+  return {
+    recommend: "solo",
+    reason: `Planner failed (${lastFailure}). Falling back to the main Pi session.`,
+  };
 }

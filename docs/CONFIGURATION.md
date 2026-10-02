@@ -50,7 +50,7 @@ Worker verification **first** uses `subtask.acceptance.commands` from the confir
 
 `perAgentTokens`, `verificationConfig`, `customVerifiers`, `schedulerStrategy`, `planner.templates`, `--config`, `$schema`.
 
-`safetyGuardPath` does not expand `~`. Plugin paths (`run.verificationStrategy` etc.) do.
+`safetyGuardPath` expands a leading `~/`, matching plugin paths (`run.verificationStrategy` etc.).
 
 ## Complete Configuration Schema
 
@@ -321,7 +321,7 @@ Optional path to custom safety guard extension loaded into all workers.
 }
 ```
 
-Use an **absolute** path. `~` is not expanded for this field.
+Use an absolute path or a `~/…` path (tilde is expanded).
 
 ## Common Configuration Patterns
 

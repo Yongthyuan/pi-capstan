@@ -1,12 +1,12 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ConflictRecord, GitMergeOperation, PendingUiRequest, Subtask, CapstanConfig, CapstanRun, VerificationResult, WorkerRuntime } from "./types.ts";
-import { addUsage, emptyUsage, ensurePrivateDir, pathExists, truncateTail } from "./utils.ts";
+import { addUsage, emptyUsage, ensurePrivateDir, expandHomePath, pathExists, truncateTail } from "./utils.ts";
 import { RunStore } from "./state.ts";
 import { WorkspaceManager } from "./workspace.ts";
 import { writeGuardExtension } from "./guard-template.ts";
 import { WorkerHandle, type WorkerHandleOptions } from "./worker.ts";
-import { resolveVerifyCommands, skippedVerification, verificationFailurePrompt, verifyCommands } from "./verifier.ts";
+import { resolveVerifyCommands, skippedVerification, missingVerification, verificationFailurePrompt, verifyCommands } from "./verifier.ts";
 import { validatePlan } from "./plan-validation.ts";
 import { buildReport } from "./reporter.ts";
 import { RepoLock } from "./repo-lock.ts";
@@ -14,6 +14,7 @@ import { processIdentityStatus, stopOwnedProcess } from "./process-identity.ts";
 import { MetricsCollector } from "./metrics.ts";
 import { loadConfiguredPlugins } from "./plugin-loader.ts";
 import type { DefaultPluginRegistry } from "./plugins/registry.ts";
+import type { CollaborationPrimitive } from "./plugins/interfaces.ts";
 import { createSerialQueue, type SerialQueue } from "./serial-queue.ts";
 
 export interface OrchestratorHooks {
@@ -345,6 +346,7 @@ export class Orchestrator {
         }
         await this.persist();
       }
+      await this.applySchedulingAdjust();
     }
   }
 
@@ -450,16 +452,26 @@ export class Orchestrator {
           : this.workerBrief(task);
         await this.runControlledPrompt(worker, runtime, prompt, "working");
       }
-      const commands = await resolveVerifyCommands({
+      const resolved = await resolveVerifyCommands({
         configured: this.config.run.verify.worker,
         cwd: workspace.path,
         full: false,
         fallback: task.acceptance.commands,
       });
+      if (resolved.mode === "auto-empty") {
+        runtime.verification = missingVerification(`worker:${task.id}`);
+        throw new Error(
+          `${task.id}: no verification commands auto-detected and none configured. ` +
+            "Set acceptance.commands, run.verify.worker, or use [] to skip intentionally.",
+        );
+      }
+      const commands = resolved.commands;
       for (let attempt = runtime.retries; attempt <= this.config.worker.maxRetries; attempt++) {
         runtime.status = "verifying";
         runtime.currentAction = "running worker verification";
-        const verification = await this.verifyControlled(task.id, commands, workspace.path, runtime);
+        const verification = resolved.mode === "explicit-skip"
+          ? skippedVerification()
+          : await this.verifyControlled(task.id, commands, workspace.path, runtime);
         runtime.verification = verification;
         if (verification.ok || verification.skipped) break;
         if (verification.commands.some((command) => command.blocked)) throw new Error(`${task.id} 验证命令被安全策略拒绝: ${verification.commands.find((command) => command.blocked)?.stderr}`);
@@ -778,12 +790,12 @@ export class Orchestrator {
     let operation = this.activeOperation();
     let target = operation?.candidateWorktree ?? this.run.git!.integrationWorktree;
     await this.prepareVerificationEnvironment(target, operation);
-    const commands = await resolveVerifyCommands({
+    const resolved = await resolveVerifyCommands({
       configured: full ? this.config.run.verify.full : this.config.run.verify.integrationLight,
       cwd: target,
       full,
     });
-    if (!commands.length) {
+    if (resolved.mode === "explicit-skip") {
       const result = skippedVerification();
       if (full) this.run.finalVerification = result;
       if (operation) {
@@ -794,6 +806,20 @@ export class Orchestrator {
       }
       return;
     }
+    if (resolved.mode === "auto-empty") {
+      const result = missingVerification(full ? "integration-full" : "integration-light");
+      if (full) this.run.finalVerification = result;
+      if (operation) {
+        operation.verification = result;
+        operation.updatedAt = Date.now();
+        await this.persist();
+      }
+      throw new Error(
+        `${full ? "Full" : "Light"} integration verification has no auto-detected commands. ` +
+          "Set run.verify.full / run.verify.integrationLight explicitly, or [] to skip.",
+      );
+    }
+    const commands = resolved.commands;
     let result = await this.verifyControlled(full ? "integration-full" : "integration-light", commands, target);
     if (result.commands.some((command) => command.blocked)) throw new Error(`集成验证命令被安全策略拒绝: ${result.commands.find((command) => command.blocked)?.stderr}`);
     if (!result.ok) {
@@ -1126,7 +1152,7 @@ export class Orchestrator {
   }
 
   private async resolveSafetyGuard(): Promise<string | undefined> {
-    const configured = this.config.safetyGuardPath ?? join(this.agentDir, "extensions", "safety-guard.ts");
+    const configured = expandHomePath(this.config.safetyGuardPath ?? join(this.agentDir, "extensions", "safety-guard.ts"));
     return await pathExists(configured) ? configured : undefined;
   }
 
@@ -1172,7 +1198,24 @@ export class Orchestrator {
       for (const line of data.trim().split("\n")) {
         try {
           const item = JSON.parse(line) as { from?: string; message?: string };
-          if (item.from && item.message) messages.push(`[${item.from}] ${String(item.message).slice(0, 4_000)}`);
+          if (item.from && item.message) {
+            messages.push(`[${item.from}] ${String(item.message).slice(0, 4_000)}`);
+            await this.invokeCollaborationHooks({
+              from: item.from,
+              to: id,
+              type: "mailbox",
+              payload: item.message,
+            });
+            const structured = tryParseCoordinationPayload(item.message);
+            if (structured) {
+              await this.invokeCollaborationHooks({
+                from: item.from,
+                to: id,
+                type: structured.type,
+                payload: structured.payload,
+              });
+            }
+          }
         } catch { /* Leave malformed mailbox data inspectable without injecting it. */ }
       }
       runtime.mailboxOffset = Buffer.byteLength(raw);
@@ -1182,6 +1225,24 @@ export class Orchestrator {
         await handle.steer(`CAPSTAN MAILBOX\n${messages.join("\n\n")}\nAcknowledge or act only if relevant to your owned task.`).catch(() => undefined);
       }
       this.schedulePersist();
+    }
+  }
+
+  private async invokeCollaborationHooks(request: {
+    from: string;
+    to?: string;
+    type: string;
+    payload: unknown;
+  }): Promise<void> {
+    if (!this.plugins) return;
+    for (const entry of this.plugins.list("collaboration")) {
+      const plugin = this.plugins.get("collaboration", entry.name) as CollaborationPrimitive | undefined;
+      if (!plugin?.coordinate) continue;
+      try {
+        await plugin.coordinate(request);
+      } catch {
+        // Collaboration hooks must not break mailbox delivery.
+      }
     }
   }
 
@@ -1280,7 +1341,6 @@ export class Orchestrator {
         this.effectiveConcurrency = Math.max(1, Math.min(this.config.worker.maxConcurrency, suggested));
       }
       // `schedule().batches` is advisory width only. DAG order stays `dependsOn`.
-      // Do not call `adjust()` here: metrics are not yet available.
     } catch (error) {
       // Plugin failures must not abort the run; fall back to configured concurrency.
       this.effectiveConcurrency = this.config.worker.maxConcurrency;
@@ -1288,6 +1348,41 @@ export class Orchestrator {
       void error;
     }
   }
+
+  private async applySchedulingAdjust(): Promise<void> {
+    const strategy = this.plugins?.get("scheduling", "configured");
+    if (!strategy?.adjust) return;
+    try {
+      const stalledWorkers = Object.values(this.run.workers)
+        .filter((worker) => (worker.stallCount ?? 0) > 0 && ["working", "fixing", "failed"].includes(worker.status))
+        .map((worker) => worker.subtaskId);
+      const metrics = this.metrics.snapshot({
+        budgetUsd: this.config.run.budgetUsd,
+        spentUsd: this.run.totals.cost || 0,
+        stalledWorkers,
+      });
+      const adjustment = await strategy.adjust(metrics);
+      if (typeof adjustment.newConcurrency === "number" && Number.isFinite(adjustment.newConcurrency)) {
+        this.effectiveConcurrency = Math.max(1, Math.min(this.config.worker.maxConcurrency, Math.trunc(adjustment.newConcurrency)));
+      }
+    } catch {
+      // Keep current concurrency when adjust() fails.
+    }
+  }
+}
+
+function tryParseCoordinationPayload(message: string): { type: string; payload: unknown } | undefined {
+  const trimmed = message.trim();
+  if (!trimmed.startsWith("{")) return undefined;
+  try {
+    const parsed = JSON.parse(trimmed) as { type?: unknown; payload?: unknown };
+    if (typeof parsed.type === "string" && parsed.type.trim()) {
+      return { type: parsed.type, payload: parsed.payload ?? {} };
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }
 
 function extractCompletionReport(text: string): string {

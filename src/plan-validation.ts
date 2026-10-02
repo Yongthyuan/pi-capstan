@@ -2,6 +2,100 @@ import type { PlanValidation, CapstanPlan, Subtask } from "./types.ts";
 import { globToRegExp } from "./utils.ts";
 import { isStructurallySafeVerificationCommand } from "./verifier.ts";
 
+/**
+ * Mechanically repair unsafe/empty acceptance commands before LLM schema retries.
+ * Splits out shell operators, keeps allowlisted prefixes, and optionally fills
+ * from stack-detected defaults when a subtask would otherwise have none.
+ */
+export function sanitizePlanAcceptance(
+  plan: CapstanPlan,
+  allowedPrefixes: string[],
+  defaultCommands: string[] = [],
+): { plan: CapstanPlan; repairs: string[] } {
+  const next = structuredClone(plan);
+  const repairs: string[] = [];
+  for (const task of next.subtasks) {
+    const kept: string[] = [];
+    for (const command of task.acceptance?.commands ?? []) {
+      if (typeof command !== "string") continue;
+      if (isAllowlistedVerificationCommand(command, allowedPrefixes)) {
+        kept.push(command.trim());
+        continue;
+      }
+      const repaired = tryRepairAcceptanceCommand(command, allowedPrefixes);
+      if (repaired) {
+        repairs.push(`${task.id}: repaired acceptance ${JSON.stringify(command)} → ${JSON.stringify(repaired)}`);
+        kept.push(repaired);
+      } else {
+        repairs.push(`${task.id}: dropped unsafe acceptance ${JSON.stringify(command)}`);
+      }
+    }
+    if (!kept.length && defaultCommands.length) {
+      for (const command of defaultCommands) {
+        if (isAllowlistedVerificationCommand(command, allowedPrefixes)) kept.push(command);
+      }
+      if (kept.length) repairs.push(`${task.id}: filled acceptance from auto-detect (${kept.join("; ")})`);
+    }
+    task.acceptance = {
+      commands: kept,
+      criteria: Array.isArray(task.acceptance?.criteria) ? task.acceptance.criteria : [],
+    };
+  }
+  return { plan: next, repairs };
+}
+
+export function isAllowlistedVerificationCommand(command: string, allowedPrefixes: string[]): boolean {
+  if (!isStructurallySafeVerificationCommand(command)) return false;
+  const normalized = tokenizeLoose(command);
+  if (!normalized) return false;
+  return allowedPrefixes.some((prefix) => {
+    const clean = tokenizeLoose(prefix);
+    return Boolean(clean) && (normalized === clean || normalized.startsWith(`${clean} `));
+  });
+}
+
+function tryRepairAcceptanceCommand(command: string, allowedPrefixes: string[]): string | undefined {
+  const segments = command
+    .split(/[;&|<>`\r\n]+/)
+    .map((part) => part.replace(/\$\([^)]*\)|\$\{[^}]*\}/g, "").trim())
+    .filter(Boolean);
+  for (const segment of segments) {
+    if (isAllowlistedVerificationCommand(segment, allowedPrefixes)) return segment;
+  }
+  return undefined;
+}
+
+function tokenizeLoose(command: string): string | undefined {
+  try {
+    const tokens: string[] = [];
+    let current = "";
+    let quote: "'" | '"' | undefined;
+    let escaped = false;
+    for (const char of command.trim()) {
+      if (escaped) {
+        current += char;
+        escaped = false;
+      } else if (char === "\\" && quote !== "'") {
+        escaped = true;
+      } else if (quote) {
+        if (char === quote) quote = undefined;
+        else current += char;
+      } else if (char === "'" || char === '"') {
+        quote = char;
+      } else if (/\s/.test(char)) {
+        if (current) tokens.push(current), (current = "");
+      } else {
+        current += char;
+      }
+    }
+    if (escaped || quote) return undefined;
+    if (current) tokens.push(current);
+    return tokens.length ? tokens.join(" ") : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function validatePlan(value: unknown, maxSubtasks = 12): PlanValidation {
   const errors: string[] = [];
   const warnings: string[] = [];

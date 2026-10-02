@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Planner: mechanical acceptance-command repair (strip unsafe shell, fill from auto-detect), common JSON slip fixes, and clearer solo fallback when retries still fail.
+- Verification: auto-detect with no commands is now fail-closed (`missingCommands`); only explicit `run.verify.*: []` skips a lane.
+- Plugins: mailbox delivery invokes collaboration `coordinate()`; scheduling `adjust()` runs between waves with live metrics snapshots.
+- DX: Node ≥22.19 preflight on npm scripts with an actionable strip-types message; `safetyGuardPath` expands `~/`.
+- `/capstan pr`: always writes `pr-body.md`, pushes the branch, and degrades gracefully when `gh` is missing or PR create fails.
+
 ## 0.11.0 — Reviewable parallel delivery (2026-09-10)
 
 - Delivery reports and PRs now distinguish recorded passes from skipped or missing verification. Final integration evidence is persisted; PR bodies include task checks, candidate/promotion SHAs, review requirements, and redacted fields.

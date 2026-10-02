@@ -91,7 +91,7 @@ export interface SchedulingStrategy {
 
   /**
    * Adjust scheduling dynamically based on runtime metrics.
-   * Wired when MetricsCollector snapshots are available (M0b).
+   * Called between execution waves with MetricsCollector snapshots.
    */
   adjust?(metrics: {
     avgTaskDuration: number;
@@ -111,8 +111,9 @@ export interface SchedulingStrategy {
  * Collaboration Primitive Plugin
  *
  * Coordination hooks for workers. Custom tools are **not** injected —
- * workers use built-in `capstan_send` / `capstan_inbox`. Plugins may
- * observe or transform coordination via `coordinate`.
+ * workers use built-in `capstan_send` / `capstan_inbox`. Mailbox delivery
+ * forwards each message to `coordinate({ type: "mailbox", ... })`, and also
+ * forwards structured `{ "type", "payload" }` JSON bodies when present.
  */
 export interface CollaborationPrimitive {
   readonly name: string;
@@ -122,7 +123,7 @@ export interface CollaborationPrimitive {
   initialize?(config: Record<string, unknown>): Promise<void>;
 
   /**
-   * Handle cross-worker coordination requests (mailbox / future hooks).
+   * Handle cross-worker coordination requests (mailbox delivery + structured payloads).
    */
   coordinate?(request: {
     from: string;
