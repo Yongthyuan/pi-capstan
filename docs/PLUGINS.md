@@ -329,7 +329,7 @@ Error: Plugin module not found: ~/.pi/agent/plugins/my-plugin.js
 插件运行时错误会记录在日志中：
 
 ```bash
-cat ~/.pi/agent/capstan/runs/<run-id>/log.txt
+cat <repo>/.pi/capstan/runs/<run-id>/logs/*.jsonl
 ```
 
 ## 内置 vs 插件

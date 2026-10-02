@@ -108,21 +108,15 @@ export class Orchestrator {
   }
 
   async execute(allowDirtySnapshot = false): Promise<void> {
-    if (!this.run.plan) {
-      await this.repoLock?.release();
-      throw new Error("run 没有计划");
-    }
-    const validation = validatePlan(this.run.plan, this.config.planner.maxSubtasks);
-    if (!validation.ok) {
-      await this.repoLock?.release();
-      throw new Error(`计划无效: ${validation.errors.join("; ")}`);
-    }
     this.run.error = undefined;
     this.run.outcome = undefined;
     this.run.partialSuccess = false;
     this.run.finalVerification = undefined;
     this.startedAt = this.run.createdAt;
     try {
+      if (!this.run.plan) throw new Error("run 没有计划");
+      const validation = validatePlan(this.run.plan, this.config.planner.maxSubtasks);
+      if (!validation.ok) throw new Error(`计划无效: ${validation.errors.join("; ")}`);
       this.plugins = await loadConfiguredPlugins(this.config, { repoRoot: this.run.cwd, runDir: this.run.runDir, runId: this.run.runId });
       await this.applySchedulingStrategy();
       if (this.run.git) {

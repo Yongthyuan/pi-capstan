@@ -14,10 +14,21 @@ export type {
 } from "./plugins/index.ts";
 export { DefaultPluginRegistry } from "./plugins/index.ts";
 
+function assertSupportedNode(): void {
+  const [major, minor] = process.versions.node.split(".").map((part) => Number(part));
+  if ((major ?? 0) > 22 || ((major ?? 0) === 22 && (minor ?? 0) >= 19)) return;
+  throw new Error(
+    `pi-capstan requires Node.js >= 22.19 (current ${process.version}). ` +
+      "This package ships TypeScript sources and needs Node strip-types. " +
+      "Upgrade Node, or run under a Pi build that already provides Node ≥22.19.",
+  );
+}
+
 export default function capstanExtension(pi: ExtensionAPI) {
   // Workers explicitly disable extension discovery, but this also prevents recursion
   // if a user manually starts a worker without --no-extensions.
   if (process.env.PI_CAPSTAN_WORKER === "1") return;
+  assertSupportedNode();
   const compatibility = assessPiCompatibility(VERSION, pi);
   if (compatibility.level === "unsupported") throw new Error(compatibility.message);
 
