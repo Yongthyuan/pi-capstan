@@ -29,6 +29,9 @@ test("config loading falls back to swarm.json but prefers capstan.json", async (
     const renamed = await loadConfig(agentDir, repo, ".pi");
     assert.equal(renamed.worker.maxConcurrency, 5);
     assert.equal(renamed.run.budgetUsd, 6);
+
+    await writeFile(join(projectDir, "capstan.json"), "{not-json");
+    await assert.rejects(() => loadConfig(agentDir, repo, ".pi"), /Failed to parse config.*capstan\.json/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

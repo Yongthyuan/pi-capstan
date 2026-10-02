@@ -114,8 +114,8 @@ export function validateConfig(config: CapstanConfig): ValidationResult {
     issues.push({
       path: "run.verify",
       level: "warning",
-      message: "全部验证通道为 null：集成验证将 auto-detect；探测不到命令则跳过（报告写「跳过」，不是已验证）",
-      suggestion: "高质量任务请显式设置 run.verify.full，或接受探测结果",
+      message: "全部验证通道为 null：将 auto-detect；探测不到命令时 fail-closed（不视为已验证）",
+      suggestion: "高质量任务请显式设置 run.verify.full；故意跳过请用 []",
     });
   }
   if (Array.isArray(verify.worker) && verify.worker.length === 0

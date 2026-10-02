@@ -51,7 +51,7 @@ Flag mapping:
 | Cases | `~/.pi/agent/capstan/cases` |
 | Worktrees | `~/.pi/agent/capstan/worktrees` |
 
-`safetyGuardPath` does **not** expand `~`. Use an absolute path.
+`safetyGuardPath` expands a leading `~/` (same as plugin module paths). Absolute paths still work.
 
 ## Templates
 

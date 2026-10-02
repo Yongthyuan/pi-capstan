@@ -7,11 +7,11 @@ import { DEFAULT_CONFIG } from "../src/config.ts";
 import { validateConfig } from "../src/config-validator.ts";
 import { generateConfigFromAnswers } from "../src/config-wizard.ts";
 import { parsePorcelainStatus } from "../src/workspace.ts";
-import { resolveVerifyCommands, skippedVerification, verifyCommands } from "../src/verifier.ts";
+import { missingVerification, resolveVerifyCommands, skippedVerification, verifyCommands } from "../src/verifier.ts";
 import { buildReport } from "../src/reporter.ts";
 import type { CapstanRun } from "../src/types.ts";
 
-test("resolveVerifyCommands: fallback wins, [] skips, null detects", async () => {
+test("resolveVerifyCommands: fallback wins, [] skips, null detects, empty detect is auto-empty", async () => {
   const root = await mkdtemp(join(tmpdir(), "capstan-resolve-"));
   try {
     await writeFile(join(root, "package.json"), JSON.stringify({ scripts: { typecheck: "tsc", test: "node --test" } }));
@@ -21,14 +21,31 @@ test("resolveVerifyCommands: fallback wins, [] skips, null detects", async () =>
       full: true,
       fallback: ["npm run typecheck"],
     });
-    assert.deepEqual(fallback, ["npm run typecheck"]);
+    assert.equal(fallback.mode, "commands");
+    assert.deepEqual(fallback.commands, ["npm run typecheck"]);
 
     const skip = await resolveVerifyCommands({ configured: [], cwd: root, full: true });
-    assert.deepEqual(skip, []);
+    assert.equal(skip.mode, "explicit-skip");
+    assert.deepEqual(skip.commands, []);
 
     const detect = await resolveVerifyCommands({ configured: null, cwd: root, full: true });
-    assert.ok(detect.includes("npm run typecheck"));
-    assert.ok(detect.includes("npm test"));
+    assert.equal(detect.mode, "commands");
+    assert.ok(detect.commands.includes("npm run typecheck"));
+    assert.ok(detect.commands.includes("npm test"));
+
+    const emptyRoot = await mkdtemp(join(tmpdir(), "capstan-resolve-empty-"));
+    try {
+      await writeFile(join(emptyRoot, "README.md"), "no stack markers\n");
+      const miss = await resolveVerifyCommands({ configured: null, cwd: emptyRoot, full: true });
+      assert.equal(miss.mode, "auto-empty");
+      assert.deepEqual(miss.commands, []);
+      const missing = missingVerification("integration-full");
+      assert.equal(missing.ok, false);
+      assert.equal(missing.missingCommands, true);
+      assert.equal(missing.skipped, false);
+    } finally {
+      await rm(emptyRoot, { recursive: true, force: true });
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

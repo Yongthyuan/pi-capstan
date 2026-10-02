@@ -187,9 +187,14 @@ export class CapstanService {
       lockTransferred = Boolean(repoLock);
       this.activeOrchestrator = orchestrator;
       ctx.ui.notify(`capstan ${runId} 已启动；/capstan board 查看`, "info");
-      void orchestrator.execute(allowDirty).finally(() => {
-        if (this.activeRun?.runId === runId) this.activeOrchestrator = undefined;
-      });
+      void orchestrator.execute(allowDirty)
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          ctx.ui.notify(`capstan ${runId} failed: ${message}`, "error");
+        })
+        .finally(() => {
+          if (this.activeRun?.runId === runId) this.activeOrchestrator = undefined;
+        });
     } catch (error) {
       run.phase = "failed";
       run.outcome = "failed";
@@ -210,6 +215,22 @@ export class CapstanService {
     const unfinished = (await store.list()).filter((run) => !["done", "aborted", "failed"].includes(run.phase) || (run.phase === "done" && run.partialSuccess));
     if (store.diagnostics.length) ctx.ui.notify(`有 ${store.diagnostics.length} 个 capstan 状态损坏；请用运行目录中的 state.prev.json 排查`, "warning");
     if (unfinished.length) ctx.ui.notify(`发现 ${unfinished.length} 个未完成 capstan run；使用 /capstan resume`, "warning");
+    const legacyRoot = join(repoRoot, this.configDirName, "swarm", "runs");
+    if (await pathExists(legacyRoot)) {
+      try {
+        const { readdir } = await import("node:fs/promises");
+        const entries = await readdir(legacyRoot, { withFileTypes: true });
+        const legacyCount = entries.filter((entry) => entry.isDirectory()).length;
+        if (legacyCount > 0) {
+          ctx.ui.notify(
+            `Found ${legacyCount} legacy run(s) under ${legacyRoot}. Capstan 0.10+ only resumes .pi/capstan/runs — migrate manually if needed.`,
+            "warning",
+          );
+        }
+      } catch {
+        // ignore listing failures
+      }
+    }
   }
 
   async onSessionShutdown(): Promise<void> {
@@ -306,8 +327,10 @@ export class CapstanService {
     const runs = (await store.list()).filter((run) => Boolean(run.plan) && run.phase !== "aborted" && (run.phase !== "done" || run.partialSuccess));
     if (!runs.length) return void ctx.ui.notify("没有可恢复 run", "info");
     const selectedId = runId ?? (runs.length === 1 ? runs[0]!.runId : await ctx.ui.select("选择 run", runs.map((item) => item.runId)));
+    if (!selectedId) return void ctx.ui.notify("Resume cancelled", "info");
     const chosen = runs.find((run) => run.runId === selectedId);
-    if (!chosen?.plan) return;
+    if (!chosen) return void ctx.ui.notify(`Run not found: ${selectedId}`, "warning");
+    if (!chosen.plan) return void ctx.ui.notify(`Run ${selectedId} has no plan to resume`, "warning");
     chosen.phase = "executing";
     const config = await loadConfig(this.agentDir, repoRoot, this.configDirName);
     this.activeConfig = config;
@@ -324,7 +347,12 @@ export class CapstanService {
     }
     this.activeRun = chosen;
     this.activeOrchestrator = orchestrator;
-    void orchestrator.execute(chosen.git?.dirtyBase ?? false).finally(() => { this.activeOrchestrator = undefined; });
+    void orchestrator.execute(chosen.git?.dirtyBase ?? false)
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        ctx.ui.notify(`capstan ${chosen.runId} failed: ${message}`, "error");
+      })
+      .finally(() => { this.activeOrchestrator = undefined; });
   }
 
   private async abort(ctx: ExtensionContext): Promise<void> {
@@ -335,11 +363,11 @@ export class CapstanService {
   private async merge(ctx: ExtensionContext, runId?: string): Promise<void> {
     const repoRoot = await detectRepoRoot(ctx.cwd) ?? ctx.cwd;
     const store = new RunStore(join(repoRoot, this.configDirName, "capstan", "runs"));
-    const run = runId ? await store.load(runId) : this.activeRun;
-    if (!run?.git || (run.outcome !== "branch" && !run.merged.length)) return void ctx.ui.notify("没有可落地的 last-green branch 结果", "warning");
+    const run = await this.pickCompletedRun(ctx, store, runId, "没有可落地的 last-green branch 结果", (item) => Boolean(item.git && (item.outcome === "branch" || item.merged.length)));
+    if (!run) return;
     const config = this.activeConfig ?? await loadConfig(this.agentDir, run.cwd, this.configDirName);
     const workspace = new WorkspaceManager({ cwd: run.cwd, runId: run.runId, runDir: run.runDir, worktreesRoot: join(this.agentDir, "capstan", "worktrees") });
-    workspace.restore(run.git);
+    workspace.restore(run.git!);
     const lock = await RepoLock.forRepo(run.cwd, `merge-${run.runId}`);
     await lock.acquire();
     try {
@@ -374,10 +402,16 @@ export class CapstanService {
     const repoRoot = await detectRepoRoot(ctx.cwd);
     if (!repoRoot) return void ctx.ui.notify("非 Git 仓库", "warning");
     const store = new RunStore(join(repoRoot, this.configDirName, "capstan", "runs"));
-    const run = runId ? await store.load(runId) : this.activeRun;
-    if (!run?.git || !run.merged.length) return void ctx.ui.notify("没有可发布的 last-green capstan branch", "warning");
+    const run = await this.pickCompletedRun(
+      ctx,
+      store,
+      runId,
+      "没有可发布的 last-green capstan branch",
+      (item) => Boolean(item.git && item.merged.length),
+    );
+    if (!run?.git) return;
     const branch = run.git.integrationBranch;
-    if (!(await ctx.ui.confirm("创建 GitHub Pull Request", `将 ${branch} 推送到 origin，并附上已脱敏的任务目标、验证命令和晋升证据？`))) return;
+    if (!(await ctx.ui.confirm("Create pull request", `Push ${branch} to origin and prepare a proof-carrying PR body (task goals, checks, promotion evidence)?`))) return;
     const lock = await RepoLock.forRepo(repoRoot, `pr-${run.runId}`);
     await lock.acquire();
     try {
@@ -385,14 +419,89 @@ export class CapstanService {
       if (pushed.exitCode !== 0) throw new Error(`git push 失败: ${pushed.stderr || pushed.stdout}`);
       const title = `capstan: run ${run.runId}`;
       const body = buildProofCarryingPrBody(run);
-      const created = await runCommand("gh", ["pr", "create", "--head", branch, "--title", title, "--body", body], { cwd: repoRoot, timeoutMs: 120_000 });
-      if (created.exitCode !== 0) throw new Error(`gh pr create 失败: ${created.stderr || created.stdout}`);
+      const bodyPath = join(run.runDir, "pr-body.md");
+      await ensurePrivateDir(run.runDir);
+      await writeFile(bodyPath, `${body}\n`, { mode: 0o600 });
+      let ghVersion;
+      try {
+        ghVersion = await runCommand("gh", ["--version"], { cwd: repoRoot, timeoutMs: 10_000 });
+      } catch (error) {
+        const missing = error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "ENOENT";
+        run.prUrl = undefined;
+        await store.save(run);
+        return void ctx.ui.notify(
+          `Pushed ${branch}. GitHub CLI (gh) ${missing ? "not found" : "failed to start"} — open a PR manually.\n` +
+            `PR body written to ${bodyPath}\n` +
+            `Example: gh pr create --head ${branch} --title ${JSON.stringify(title)} --body-file ${bodyPath}`,
+          "warning",
+        );
+      }
+      if (ghVersion.exitCode !== 0) {
+        run.prUrl = undefined;
+        await store.save(run);
+        return void ctx.ui.notify(
+          `Pushed ${branch}. GitHub CLI (gh) not available — open a PR manually.\n` +
+            `PR body written to ${bodyPath}\n` +
+            `Example: gh pr create --head ${branch} --title ${JSON.stringify(title)} --body-file ${bodyPath}`,
+          "warning",
+        );
+      }
+      const created = await runCommand("gh", ["pr", "create", "--head", branch, "--title", title, "--body-file", bodyPath], { cwd: repoRoot, timeoutMs: 120_000 });
+      if (created.exitCode !== 0) {
+        run.prUrl = undefined;
+        await store.save(run);
+        return void ctx.ui.notify(
+          `Pushed ${branch}, but PR create failed: ${created.stderr || created.stdout}\n` +
+            `PR body: ${bodyPath}\n` +
+            `Retry: gh pr create --head ${branch} --title ${JSON.stringify(title)} --body-file ${bodyPath}`,
+          "warning",
+        );
+      }
       run.prUrl = created.stdout.trim().split("\n").find((line) => /^https:\/\//.test(line));
       await store.save(run);
       ctx.ui.notify(run.prUrl ? `PR 已创建: ${run.prUrl}` : "PR 已创建", "info");
     } finally {
       await lock.release();
     }
+  }
+
+  private async pickCompletedRun(
+    ctx: ExtensionContext,
+    store: RunStore,
+    runId: string | undefined,
+    emptyMessage: string,
+    predicate: (run: CapstanRun) => boolean,
+  ): Promise<CapstanRun | undefined> {
+    if (runId) {
+      try {
+        const loaded = await store.load(runId);
+        if (!predicate(loaded)) {
+          ctx.ui.notify(emptyMessage, "warning");
+          return undefined;
+        }
+        return loaded;
+      } catch (error) {
+        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        return undefined;
+      }
+    }
+    if (this.activeRun && predicate(this.activeRun)) return this.activeRun;
+    const runs = (await store.list()).filter(predicate);
+    if (!runs.length) {
+      ctx.ui.notify(emptyMessage, "warning");
+      return undefined;
+    }
+    if (runs.length === 1) return runs[0];
+    const selected = await ctx.ui.select(
+      "选择 run",
+      runs.map((run) => `${run.runId} · ${run.phase}${run.git?.integrationBranch ? ` · ${run.git.integrationBranch}` : ""}`),
+    );
+    if (!selected) {
+      ctx.ui.notify("Cancelled", "info");
+      return undefined;
+    }
+    const id = selected.split(" · ")[0]!;
+    return runs.find((run) => run.runId === id);
   }
 
   private async clean(ctx: ExtensionContext): Promise<void> {

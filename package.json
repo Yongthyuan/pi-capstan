@@ -45,21 +45,22 @@
     "capstan"
   ],
   "scripts": {
-    "test": "node --test test/*.test.ts",
-    "test:ci": "node --test --experimental-test-isolation=none --test-force-exit test/*.test.ts",
-    "test:soak": "node scripts/soak.mjs",
-    "check": "tsc --noEmit && node scripts/check-syntax.mjs",
-    "bench": "node scripts/bench/run-baseline.mjs --suite smoke",
-    "bench:core": "node scripts/bench/run-baseline.mjs --suite core",
-    "bench:full": "node scripts/bench/run-baseline.mjs --suite full",
-    "bench:retry": "node scripts/bench/run-baseline.mjs --retry-errors --attempts 6",
-    "bench:validate": "node scripts/bench/run-baseline.mjs --validate",
-    "bench:export": "node scripts/bench/export-catalog.mjs",
-    "test:native": "node scripts/native-smoke.mjs",
-    "test:native:model": "node scripts/native-model-smoke.mjs",
-    "test:native:plan": "node scripts/native-plan-smoke.mjs",
-    "test:native:e2e": "node scripts/native-e2e-smoke.mjs",
-    "evidence:compare": "node scripts/generate-release-evidence.mjs"
+    "preflight": "node scripts/require-node.mjs",
+    "test": "node scripts/require-node.mjs && node --test test/*.test.ts",
+    "test:ci": "node scripts/require-node.mjs && node --test --experimental-test-isolation=none --test-force-exit test/*.test.ts",
+    "test:soak": "node scripts/require-node.mjs && node scripts/soak.mjs",
+    "check": "node scripts/require-node.mjs && tsc --noEmit && node scripts/check-syntax.mjs",
+    "bench": "node scripts/require-node.mjs && node scripts/bench/run-baseline.mjs --suite smoke",
+    "bench:core": "node scripts/require-node.mjs && node scripts/bench/run-baseline.mjs --suite core",
+    "bench:full": "node scripts/require-node.mjs && node scripts/bench/run-baseline.mjs --suite full",
+    "bench:retry": "node scripts/require-node.mjs && node scripts/bench/run-baseline.mjs --retry-errors --attempts 6",
+    "bench:validate": "node scripts/require-node.mjs && node scripts/bench/run-baseline.mjs --validate",
+    "bench:export": "node scripts/require-node.mjs && node scripts/bench/export-catalog.mjs",
+    "test:native": "node scripts/require-node.mjs && node scripts/native-smoke.mjs",
+    "test:native:model": "node scripts/require-node.mjs && node scripts/native-model-smoke.mjs",
+    "test:native:plan": "node scripts/require-node.mjs && node scripts/native-plan-smoke.mjs",
+    "test:native:e2e": "node scripts/require-node.mjs && node scripts/native-e2e-smoke.mjs",
+    "evidence:compare": "node scripts/require-node.mjs && node scripts/generate-release-evidence.mjs"
   },
   "pi": {
     "extensions": [

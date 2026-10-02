@@ -108,7 +108,12 @@ export function deepMerge<T>(base: T, override: unknown): T {
 async function readJsonIfPresent(path: string): Promise<unknown> {
   if (!(await pathExists(path))) return undefined;
   const raw = await readFile(path, "utf8");
-  return JSON.parse(raw) as unknown;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to parse config ${path}: ${detail}`);
+  }
 }
 
 /** Prefer the renamed config file; fall back to the pre-0.10 `swarm.json` location. */

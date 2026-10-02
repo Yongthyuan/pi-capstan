@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { globsMayOverlap, validatePlan } from "../src/plan-validation.ts";
+import { globsMayOverlap, sanitizePlanAcceptance, validatePlan } from "../src/plan-validation.ts";
 import { globToRegExp, matchesAnyGlob } from "../src/utils.ts";
+import { parseJsonFromText, repairCommonJsonIssues } from "../src/llm.ts";
+import { DEFAULT_CONFIG } from "../src/config.ts";
+import { expandHomePath } from "../src/utils.ts";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const validPlan = {
   schemaVersion: 1 as const,
@@ -45,4 +50,28 @@ test("rejects traversal ids and malformed arrays without throwing", () => {
   const result = validatePlan(malformed);
   assert.equal(result.ok, false);
   assert.equal(result.errors.some((error) => error.includes("subtask.id") || error.includes("dependsOn")), true);
+});
+
+test("sanitizePlanAcceptance repairs piped shell and fills defaults", () => {
+  const dirty: any = structuredClone(validPlan);
+  dirty.subtasks[0].acceptance.commands = ["npm test | tee /tmp/out", "npm run check"];
+  dirty.subtasks[1].acceptance.commands = ["echo hi && rm -rf /"];
+  const { plan, repairs } = sanitizePlanAcceptance(dirty, DEFAULT_CONFIG.run.verifyAllowedPrefixes, ["npm test"]);
+  assert.ok(repairs.length >= 1);
+  assert.deepEqual(plan.subtasks[0]!.acceptance.commands, ["npm test", "npm run check"]);
+  assert.deepEqual(plan.subtasks[1]!.acceptance.commands, ["npm test"]);
+  const validation = validatePlan(plan);
+  assert.equal(validation.ok, true, validation.errors.join("; "));
+});
+
+test("parseJsonFromText repairs trailing commas and bare keys", () => {
+  const repaired = repairCommonJsonIssues('{recommend:"solo",reason:"x",}');
+  assert.equal(JSON.parse(repaired).recommend, "solo");
+  const parsed = parseJsonFromText('here\n```json\n{"schemaVersion":1,"taskSummary":"t","strategy":"s","contracts":[],"subtasks":[],"mergeOrder":[],"risks":[],}\n```');
+  assert.equal((parsed as any).schemaVersion, 1);
+});
+
+test("expandHomePath expands tilde for safetyGuardPath-style configs", () => {
+  assert.equal(expandHomePath("~/extensions/safety-guard.ts"), join(homedir(), "extensions/safety-guard.ts"));
+  assert.equal(expandHomePath("/abs/path.ts"), "/abs/path.ts");
 });

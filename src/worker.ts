@@ -5,6 +5,7 @@ import { appendFile } from "node:fs/promises";
 import type { PendingUiRequest, UsageTotals, WorkerEventMap } from "./types.ts";
 import { emptyUsage, ensurePrivateDir, runCommand, truncateTail } from "./utils.ts";
 import { processMarker } from "./process-identity.ts";
+import { formatPiLaunchError, resolvePiLaunch } from "./pi-launch.ts";
 
 export interface WorkerHandleOptions {
   id: string;
@@ -58,8 +59,11 @@ export class WorkerHandle {
     this.stopping = false;
     await ensurePrivateDir(dirname(this.logPath));
     await ensurePrivateDir(this.options.sessionDir);
-    const command = this.options.piCommand ?? process.env.PI_CAPSTAN_PI_BIN ?? "pi";
-    const args = [...(this.options.piArgsPrefix ?? []), "--mode", "rpc", "--session-dir", this.options.sessionDir, "--no-extensions"];
+    const launch = this.options.piCommand
+      ? { command: this.options.piCommand, argsPrefix: this.options.piArgsPrefix ?? [], source: "options" as const }
+      : await resolvePiLaunch();
+    const command = launch.command;
+    const args = [...launch.argsPrefix, "--mode", "rpc", "--session-dir", this.options.sessionDir, "--no-extensions"];
     if (this.options.sessionFile && await fileExists(this.options.sessionFile)) args.push("--session", this.options.sessionFile);
     else args.push("--name", `capstan/${this.options.id} ${this.options.title}`);
     if (this.options.model) args.push("--model", this.options.model);
@@ -80,7 +84,7 @@ export class WorkerHandle {
     child.stdout.on("data", (chunk: string) => this.consumeStdout(chunk));
     child.stderr.on("data", (chunk: string) => this.consumeStderr(chunk));
     child.on("error", (error) => {
-      this.failAll(error);
+      this.failAll(formatPiLaunchError(error, launch));
       if (this.child === child) this.child = undefined;
     });
     child.on("exit", (code) => {

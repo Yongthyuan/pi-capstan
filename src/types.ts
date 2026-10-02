@@ -240,8 +240,10 @@ export interface VerificationCommandResult {
 
 export interface VerificationResult {
   ok: boolean;
-  /** True when the lane resolved to zero commands (explicit skip or nothing to detect). */
+  /** True when the lane resolved to an intentional skip (`run.verify.*: []`). */
   skipped?: boolean;
+  /** True when auto-detect found no commands and the lane was not explicitly skipped. */
+  missingCommands?: boolean;
   commands: VerificationCommandResult[];
 }
 

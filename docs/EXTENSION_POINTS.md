@@ -80,7 +80,7 @@ export default function(pi: ExtensionAPI) {
 }
 ```
 
-All workers will now have `capstan_query_db` and `capstan_semantic_search` available. `safetyGuardPath` does not expand `~`.
+All workers will now have `capstan_query_db` and `capstan_semantic_search` available. `safetyGuardPath` expands a leading `~/`.
 
 ### Custom Scope Policies
 
@@ -154,7 +154,7 @@ User says: "Workers need to query the project database for schema information"
 
 **Your steps**:
 1. Create custom guard extension with `capstan_query_db` tool
-2. Add an **absolute** `safetyGuardPath` to `.pi/capstan.json` (`~` is not expanded)
+2. Add a `safetyGuardPath` to `.pi/capstan.json` (absolute path or `~/…`)
 3. Test with `/capstan` command
 4. Observe workers using the new tool in their prompts
 

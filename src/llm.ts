@@ -132,5 +132,22 @@ export function parseJsonFromText<T>(text: string): T {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
   const candidate = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
   if (!candidate) throw new Error("模型没有返回 JSON");
-  return JSON.parse(candidate) as T;
+  const attempts = [candidate, repairCommonJsonIssues(candidate)];
+  let lastError: unknown;
+  for (const attempt of attempts) {
+    try {
+      return JSON.parse(attempt) as T;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+/** Best-effort fixes for common model JSON slips before giving up on the parse. */
+export function repairCommonJsonIssues(text: string): string {
+  return text
+    .replace(/^\uFEFF/, "")
+    .replace(/,\s*([}\]])/g, "$1")
+    .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":');
 }

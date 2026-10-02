@@ -2,7 +2,7 @@
 
 > 插件是**可选表面**，不是主产品。主路径是计划 `acceptance.commands` + `run.verify`。
 >
-> 诚实限制：验证插件已接到 worker 验收（含真实 git porcelain diff 与 `classifyFailure`）；调度插件只调节并发宽度；协作插件会加载，可通过 `coordinate()` 挂钩，但**不会**向 worker 注入自定义 tools（工人仍用 `capstan_send` / `capstan_inbox`）。
+> 诚实限制：验证插件已接到 worker 验收（含真实 git porcelain diff 与 `classifyFailure`）；调度插件的 `schedule()` 调节并发宽度，`adjust()` 在波次之间用运行时指标再调；协作插件会加载，mailbox 投递时会调用 `coordinate()`（含 `type:"mailbox"` 与结构化 JSON body），但**不会**向 worker 注入自定义 tools（工人仍用 `capstan_send` / `capstan_inbox`）。
 
 ## 核心理念
 
@@ -329,7 +329,7 @@ Error: Plugin module not found: ~/.pi/agent/plugins/my-plugin.js
 插件运行时错误会记录在日志中：
 
 ```bash
-cat ~/.pi/agent/capstan/runs/<run-id>/log.txt
+cat <repo>/.pi/capstan/runs/<run-id>/logs/*.jsonl
 ```
 
 ## 内置 vs 插件
